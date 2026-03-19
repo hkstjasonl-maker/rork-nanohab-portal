@@ -1,0 +1,9 @@
+{
+  "apps": [
+    {
+      "name": "NanoHab Portal",
+      "path": "expo",
+      "framework": "react-native"
+    }
+  ]
+}
