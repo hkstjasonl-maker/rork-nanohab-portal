@@ -17,6 +17,7 @@ interface StoredAuth {
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsAgreement, setNeedsAgreement] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<UserRole | null>(null);
   const [adminUser, setAdminUser] = useState<{ id: string; email: string } | null>(null);
@@ -119,10 +120,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (data.is_active === false) throw new Error('Account is deactivated 帳戶已停用');
     if (data.is_approved === false) throw new Error('Account pending approval 帳戶待批准');
 
+    await supabase.from('clinicians').update({ last_login_at: new Date().toISOString() }).eq('id', data.id);
+
     const c = data as Clinician;
     setClinician(c);
     setRole('clinician');
     setIsAuthenticated(true);
+    setNeedsAgreement(!c.agreement_accepted_at);
 
     if (c.tier_id) {
       void loadClinicianTier(c.tier_id);
@@ -177,9 +181,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     adminUser,
     clinician,
     clinicianTier,
+    needsAgreement,
     loginAdmin,
     loginClinician,
     logout,
     clinicianCan,
-  }), [isAuthenticated, isLoading, role, isAdmin, adminUser, clinician, clinicianTier, loginAdmin, loginClinician, logout, clinicianCan]);
+    setNeedsAgreement,
+  }), [isAuthenticated, isLoading, role, isAdmin, adminUser, clinician, clinicianTier, needsAgreement, loginAdmin, loginClinician, logout, clinicianCan]);
 });

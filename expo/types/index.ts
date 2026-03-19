@@ -11,6 +11,7 @@ export interface Clinician {
   is_approved?: boolean;
   agreement_accepted_at?: string;
   interest_tags?: string[];
+  last_login_at?: string;
   created_at?: string;
   override_can_view_patients?: boolean | null;
   override_can_edit_patients?: boolean | null;
@@ -20,6 +21,14 @@ export interface Clinician {
   override_can_view_programs?: boolean | null;
   override_can_create_programs?: boolean | null;
   override_can_marketplace?: boolean | null;
+  override_can_use_shared_exercises?: boolean | null;
+  override_can_upload_exercises?: boolean | null;
+  override_can_assign_assessments?: boolean | null;
+  override_can_view_dashboard?: boolean | null;
+  override_can_push_knowledge_videos?: boolean | null;
+  override_can_push_feeding_skills?: boolean | null;
+  override_can_manage_reinforcement?: boolean | null;
+  override_can_send_notifications?: boolean | null;
 }
 
 export interface ClinicianTier {
@@ -33,6 +42,14 @@ export interface ClinicianTier {
   can_view_programs: boolean;
   can_create_programs: boolean;
   can_marketplace: boolean;
+  can_use_shared_exercises: boolean;
+  can_upload_exercises: boolean;
+  can_assign_assessments: boolean;
+  can_view_dashboard: boolean;
+  can_push_knowledge_videos: boolean;
+  can_push_feeding_skills: boolean;
+  can_manage_reinforcement: boolean;
+  can_send_notifications: boolean;
 }
 
 export interface Patient {
