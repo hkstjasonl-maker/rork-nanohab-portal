@@ -50,12 +50,12 @@ const PERMISSION_KEYS = [
 ] as const;
 
 interface EditForm {
-  name: string;
-  name_zh: string;
+  full_name: string;
+  full_name_zh: string;
   email: string;
   phone: string;
-  clinic_name: string;
-  clinic_name_zh: string;
+  organization: string;
+  organization_zh: string;
   tier_id: string;
   is_active: boolean;
   is_approved: boolean;
@@ -64,12 +64,12 @@ interface EditForm {
 }
 
 const emptyForm: EditForm = {
-  name: '',
-  name_zh: '',
+  full_name: '',
+  full_name_zh: '',
   email: '',
   phone: '',
-  clinic_name: '',
-  clinic_name_zh: '',
+  organization: '',
+  organization_zh: '',
   tier_id: '',
   is_active: true,
   is_approved: true,
@@ -165,10 +165,10 @@ export default function ClinicianManagementScreen() {
     if (!search.trim()) return cliniciansQuery.data;
     const s = search.toLowerCase();
     return cliniciansQuery.data.filter(c =>
-      c.name?.toLowerCase().includes(s) ||
+      c.full_name?.toLowerCase().includes(s) ||
       c.email?.toLowerCase().includes(s) ||
-      c.name_zh?.toLowerCase().includes(s) ||
-      c.clinic_name?.toLowerCase().includes(s)
+      c.full_name_zh?.toLowerCase().includes(s) ||
+      c.organization?.toLowerCase().includes(s)
     );
   }, [cliniciansQuery.data, search]);
 
@@ -180,12 +180,12 @@ export default function ClinicianManagementScreen() {
       overrides[pk.key] = (c as any)[pk.key] ?? null;
     });
     setForm({
-      name: c.name || '',
-      name_zh: c.name_zh || '',
+      full_name: c.full_name || '',
+      full_name_zh: c.full_name_zh || '',
       email: c.email || '',
       phone: c.phone || '',
-      clinic_name: c.clinic_name || '',
-      clinic_name_zh: c.clinic_name_zh || '',
+      organization: c.organization || '',
+      organization_zh: c.organization_zh || '',
       tier_id: c.tier_id || '',
       is_active: c.is_active !== false,
       is_approved: c.is_approved !== false,
@@ -209,12 +209,12 @@ export default function ClinicianManagementScreen() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const updates: Record<string, any> = {
-        name: form.name,
-        name_zh: form.name_zh,
+        full_name: form.full_name,
+        full_name_zh: form.full_name_zh,
         email: form.email.toLowerCase().trim(),
         phone: form.phone,
-        clinic_name: form.clinic_name,
-        clinic_name_zh: form.clinic_name_zh,
+        organization: form.organization,
+        organization_zh: form.organization_zh,
         tier_id: form.tier_id || null,
         is_active: form.is_active,
         is_approved: form.is_approved,
@@ -337,7 +337,7 @@ export default function ClinicianManagementScreen() {
             <TouchableOpacity key={c.id} style={styles.card} onPress={() => openEdit(c)} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName}>{c.name}{c.name_zh ? ` ${c.name_zh}` : ''}</Text>
+                  <Text style={styles.cardName}>{c.full_name}{c.full_name_zh ? ` ${c.full_name_zh}` : ''}</Text>
                   <Text style={styles.cardEmail}>{c.email}</Text>
                 </View>
                 <View style={[styles.tierBadge, { backgroundColor: Colors.accentLight }]}>
@@ -349,7 +349,7 @@ export default function ClinicianManagementScreen() {
                 <Text style={styles.statusText}>{c.is_active !== false ? 'Active' : 'Inactive'}</Text>
                 <View style={[styles.statusDot, { backgroundColor: c.is_approved !== false ? Colors.success : Colors.warning, marginLeft: 12 }]} />
                 <Text style={styles.statusText}>{c.is_approved !== false ? 'Approved' : 'Pending'}</Text>
-                {c.clinic_name && <Text style={styles.clinicText}>{c.clinic_name}</Text>}
+                {c.organization && <Text style={styles.clinicText}>{c.organization}</Text>}
               </View>
             </TouchableOpacity>
           ))
@@ -380,11 +380,11 @@ export default function ClinicianManagementScreen() {
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
               <Text style={styles.sectionLabel}>Basic Info 基本資料</Text>
 
-              <Text style={styles.fieldLabel}>Name</Text>
-              <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="English name" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Full Name</Text>
+              <TextInput style={styles.input} value={form.full_name} onChangeText={v => setForm(p => ({ ...p, full_name: v }))} placeholder="English name" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Name (Chinese) 中文名稱</Text>
-              <TextInput style={styles.input} value={form.name_zh} onChangeText={v => setForm(p => ({ ...p, name_zh: v }))} placeholder="中文名稱" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Full Name (Chinese) 中文名稱</Text>
+              <TextInput style={styles.input} value={form.full_name_zh} onChangeText={v => setForm(p => ({ ...p, full_name_zh: v }))} placeholder="中文名稱" placeholderTextColor={Colors.textTertiary} />
 
               <Text style={styles.fieldLabel}>Email</Text>
               <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" placeholderTextColor={Colors.textTertiary} />
@@ -392,11 +392,11 @@ export default function ClinicianManagementScreen() {
               <Text style={styles.fieldLabel}>Phone</Text>
               <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone number" keyboardType="phone-pad" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Clinic Name</Text>
-              <TextInput style={styles.input} value={form.clinic_name} onChangeText={v => setForm(p => ({ ...p, clinic_name: v }))} placeholder="Clinic name" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Organization</Text>
+              <TextInput style={styles.input} value={form.organization} onChangeText={v => setForm(p => ({ ...p, organization: v }))} placeholder="Organization name" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Clinic Name (Chinese) 診所名稱</Text>
-              <TextInput style={styles.input} value={form.clinic_name_zh} onChangeText={v => setForm(p => ({ ...p, clinic_name_zh: v }))} placeholder="診所名稱" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Organization (Chinese) 機構名稱</Text>
+              <TextInput style={styles.input} value={form.organization_zh} onChangeText={v => setForm(p => ({ ...p, organization_zh: v }))} placeholder="機構名稱" placeholderTextColor={Colors.textTertiary} />
 
               <Text style={styles.sectionLabel}>Tier & Status 級別和狀態</Text>
 

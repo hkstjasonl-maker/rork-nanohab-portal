@@ -1,11 +1,11 @@
 export interface Clinician {
   id: string;
   email: string;
-  name: string;
-  name_zh?: string;
+  full_name: string;
+  full_name_zh?: string;
   tier_id?: string;
-  clinic_name?: string;
-  clinic_name_zh?: string;
+  organization?: string;
+  organization_zh?: string;
   phone?: string;
   is_active?: boolean;
   is_approved?: boolean;
@@ -54,8 +54,8 @@ export interface ClinicianTier {
 
 export interface Patient {
   id: string;
-  name: string;
-  name_zh?: string;
+  patient_name: string;
+  patient_name_zh?: string;
   access_code: string;
   diagnosis?: string;
   diagnosis_zh?: string;
@@ -87,16 +87,17 @@ export type MediaStatus = 'active' | 'pending_review' | 'rejected';
 
 export interface Exercise {
   id: string;
-  title: string;
-  title_zh?: string;
+  title_en: string;
+  title_zh_hant?: string;
+  title_zh_hans?: string;
   category?: string;
-  description?: string;
-  description_zh?: string;
-  duration_seconds?: number;
-  vimeo_url?: string;
-  youtube_url?: string;
-  audio_url?: string;
-  subtitle_url?: string;
+  description_en?: string;
+  description_zh_hant?: string;
+  default_duration_minutes?: number;
+  vimeo_video_id?: string;
+  youtube_video_id?: string;
+  audio_instruction_url_en?: string;
+  subtitle_url_en?: string;
   live_subtitles?: boolean;
   media_status?: MediaStatus;
   created_by_clinician_id?: string;
@@ -108,7 +109,7 @@ export interface Exercise {
 
 export interface SharedExercise {
   id: string;
-  exercise_id: string;
+  exercise_library_id: string;
   clinician_id: string;
   created_at?: string;
   exercise_library?: Exercise;
@@ -116,7 +117,7 @@ export interface SharedExercise {
 
 export interface ExerciseMediaRequest {
   id?: string;
-  exercise_id: string;
+  exercise_library_id: string;
   clinician_id: string;
   video_url?: string;
   video_required: boolean;
@@ -149,7 +150,7 @@ export interface ExerciseProgram {
 export interface ProgramExercise {
   id: string;
   program_id: string;
-  exercise_id: string;
+  exercise_library_id: string;
   sort_order: number;
   dosage?: string;
   dosage_sets?: number;
@@ -170,7 +171,7 @@ export interface ProgramSchedule {
 
 export interface MarketplaceListing {
   id: string;
-  exercise_id: string;
+  exercise_library_id: string;
   clinician_id: string;
   title?: string;
   title_zh?: string;
@@ -193,7 +194,7 @@ export interface MarketplaceListing {
   created_at?: string;
   updated_at?: string;
   exercise_library?: Exercise;
-  clinicians?: { name: string; name_zh?: string; clinic_name?: string };
+  clinicians?: { full_name: string; full_name_zh?: string; organization?: string };
 }
 
 export interface MarketplaceRental {

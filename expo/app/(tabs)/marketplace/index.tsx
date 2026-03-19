@@ -82,7 +82,7 @@ export default function BrowseMarketplaceScreen() {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('marketplace_listings')
-        .select('*, exercise_library(*), clinicians(name, name_zh, clinic_name)')
+        .select('*, exercise_library(*), clinicians(full_name, full_name_zh, organization)')
         .eq('approval_status', 'approved')
         .eq('is_active', true)
         .gte('listing_end_date', today)
@@ -113,8 +113,8 @@ export default function BrowseMarketplaceScreen() {
         (l) =>
           l.title?.toLowerCase().includes(lower) ||
           l.title_zh?.toLowerCase().includes(lower) ||
-          l.exercise_library?.title?.toLowerCase().includes(lower) ||
-          l.exercise_library?.title_zh?.toLowerCase().includes(lower) ||
+          l.exercise_library?.title_en?.toLowerCase().includes(lower) ||
+          l.exercise_library?.title_zh_hant?.toLowerCase().includes(lower) ||
           l.tags?.some((t) => t.toLowerCase().includes(lower))
       );
     }
@@ -354,8 +354,8 @@ const ListingCard = React.memo(function ListingCard({
   listing: MarketplaceListing;
   onPress: () => void;
 }) {
-  const title = listing.title || listing.exercise_library?.title || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh;
+  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
   const thumbnail = listing.screenshots?.[0];
   const rate = listing.hkd_per_day ?? 0;
   const rating = listing.avg_rating ?? 0;
@@ -429,16 +429,16 @@ function ListingDetailModal({
   const [rentalDays, setRentalDays] = useState('7');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const screenshots = listing.screenshots || [];
-  const title = listing.title || listing.exercise_library?.title || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh;
-  const desc = listing.description || listing.exercise_library?.description || '';
-  const descZh = listing.description_zh || listing.exercise_library?.description_zh;
+  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
+  const desc = listing.description || listing.exercise_library?.description_en || '';
+  const descZh = listing.description_zh || listing.exercise_library?.description_zh_hant;
   const contra = listing.contraindications || listing.contraindications_zh || '';
   const rate = listing.hkd_per_day ?? 0;
   const rating = listing.avg_rating ?? 0;
   const ratingCount = listing.rating_count ?? 0;
-  const ownerName = listing.clinicians?.name || 'Unknown';
-  const ownerClinic = listing.clinicians?.clinic_name;
+  const ownerName = listing.clinicians?.full_name || 'Unknown';
+  const ownerClinic = listing.clinicians?.organization;
   const isOwn = listing.clinician_id === clinicianId;
   const days = parseInt(rentalDays, 10) || 0;
 

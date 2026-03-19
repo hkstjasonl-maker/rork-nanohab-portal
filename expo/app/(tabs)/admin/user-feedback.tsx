@@ -29,13 +29,15 @@ import { supabase } from '@/lib/supabase';
 
 interface FeedbackItem {
   id: string;
-  feedback_text: string;
+  message: string;
+  category?: string;
+  subject?: string;
   rating?: number;
   status: string;
   admin_notes?: string;
   patient_id?: string;
   created_at: string;
-  patients?: { patient_name?: string; name?: string };
+  patients?: { patient_name?: string };
 }
 
 const STATUSES = ['all', 'new', 'read', 'resolved', 'archived'] as const;
@@ -85,7 +87,7 @@ export default function UserFeedbackScreen() {
       try {
         const { data, error } = await supabase
           .from('user_feedback')
-          .select('*, patients(patient_name, name)')
+          .select('*, patients(patient_name)')
           .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as FeedbackItem[];
@@ -106,9 +108,9 @@ export default function UserFeedbackScreen() {
     if (search.trim()) {
       const s = search.toLowerCase();
       list = list.filter(f =>
-        f.feedback_text?.toLowerCase().includes(s) ||
+        f.message?.toLowerCase().includes(s) ||
         f.patients?.patient_name?.toLowerCase().includes(s) ||
-        f.patients?.name?.toLowerCase().includes(s)
+        f.subject?.toLowerCase().includes(s)
       );
     }
     return list;
@@ -206,13 +208,13 @@ export default function UserFeedbackScreen() {
           <Text style={styles.emptyText}>No feedback found</Text>
         ) : (
           filtered.map(f => {
-            const patientName = f.patients?.patient_name || f.patients?.name || 'Unknown';
+            const patientName = f.patients?.patient_name || 'Unknown';
             return (
               <TouchableOpacity key={f.id} style={styles.card} onPress={() => openDetail(f)} activeOpacity={0.7}>
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardPatient}>{patientName}</Text>
-                    <Text style={styles.cardText} numberOfLines={2}>{f.feedback_text}</Text>
+                    <Text style={styles.cardText} numberOfLines={2}>{f.message}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(f.status) + '20' }]}>
                     <Text style={[styles.statusBadgeText, { color: getStatusColor(f.status) }]}>{f.status}</Text>
@@ -250,7 +252,7 @@ export default function UserFeedbackScreen() {
                 <>
                   <Text style={styles.fieldLabel}>Patient 患者</Text>
                   <Text style={styles.detailText}>
-                    {selectedFeedback.patients?.patient_name || selectedFeedback.patients?.name || 'Unknown'}
+                    {selectedFeedback.patients?.patient_name || 'Unknown'}
                   </Text>
 
                   {selectedFeedback.rating != null && (
@@ -261,7 +263,7 @@ export default function UserFeedbackScreen() {
                   )}
 
                   <Text style={styles.fieldLabel}>Feedback 反饋</Text>
-                  <Text style={styles.feedbackFullText}>{selectedFeedback.feedback_text}</Text>
+                  <Text style={styles.feedbackFullText}>{selectedFeedback.message}</Text>
 
                   <Text style={styles.fieldLabel}>Status 狀態</Text>
                   <View style={styles.statusPicker}>

@@ -32,20 +32,20 @@ interface SharedExerciseItem {
   exercise_library_id: string;
   clinician_id: string;
   created_at?: string;
-  exercise_library?: { title: string; title_zh?: string };
-  clinicians?: { name: string; name_zh?: string };
+  exercise_library?: { title_en: string; title_zh_hant?: string };
+  clinicians?: { full_name: string; full_name_zh?: string };
 }
 
 interface ExerciseOption {
   id: string;
-  title: string;
-  title_zh?: string;
+  title_en: string;
+  title_zh_hant?: string;
 }
 
 interface ClinicianOption {
   id: string;
-  name: string;
-  name_zh?: string;
+  full_name: string;
+  full_name_zh?: string;
   email: string;
 }
 
@@ -66,7 +66,7 @@ export default function SharedExercisesScreen() {
       try {
         const { data, error } = await supabase
           .from('shared_exercises')
-          .select('*, exercise_library(title, title_zh), clinicians(name, name_zh)')
+          .select('*, exercise_library(title_en, title_zh_hant), clinicians(full_name, full_name_zh)')
           .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as SharedExerciseItem[];
@@ -82,7 +82,7 @@ export default function SharedExercisesScreen() {
     queryKey: ['admin-all-exercises'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.from('exercise_library').select('id, title, title_zh').order('title');
+        const { data, error } = await supabase.from('exercise_library').select('id, title_en, title_zh_hant').order('title_en');
         if (error) throw error;
         return (data || []) as ExerciseOption[];
       } catch (e) {
@@ -97,7 +97,7 @@ export default function SharedExercisesScreen() {
     queryKey: ['admin-all-clinicians-picker'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.from('clinicians').select('id, name, name_zh, email').eq('is_active', true).order('name');
+        const { data, error } = await supabase.from('clinicians').select('id, full_name, full_name_zh, email').eq('is_active', true).order('full_name');
         if (error) throw error;
         return (data || []) as ClinicianOption[];
       } catch (e) {
@@ -113,8 +113,8 @@ export default function SharedExercisesScreen() {
     if (!search.trim()) return sharedQuery.data;
     const s = search.toLowerCase();
     return sharedQuery.data.filter(se =>
-      se.exercise_library?.title?.toLowerCase().includes(s) ||
-      se.clinicians?.name?.toLowerCase().includes(s)
+      se.exercise_library?.title_en?.toLowerCase().includes(s) ||
+      se.clinicians?.full_name?.toLowerCase().includes(s)
     );
   }, [sharedQuery.data, search]);
 
@@ -122,14 +122,14 @@ export default function SharedExercisesScreen() {
     if (!exercisesQuery.data) return [];
     if (!exerciseSearch.trim()) return exercisesQuery.data;
     const s = exerciseSearch.toLowerCase();
-    return exercisesQuery.data.filter(e => e.title?.toLowerCase().includes(s) || e.title_zh?.toLowerCase().includes(s));
+    return exercisesQuery.data.filter(e => e.title_en?.toLowerCase().includes(s) || e.title_zh_hant?.toLowerCase().includes(s));
   }, [exercisesQuery.data, exerciseSearch]);
 
   const filteredClinicians = useMemo(() => {
     if (!cliniciansQuery.data) return [];
     if (!clinicianSearch.trim()) return cliniciansQuery.data;
     const s = clinicianSearch.toLowerCase();
-    return cliniciansQuery.data.filter(c => c.name?.toLowerCase().includes(s) || c.email?.toLowerCase().includes(s));
+    return cliniciansQuery.data.filter(c => c.full_name?.toLowerCase().includes(s) || c.email?.toLowerCase().includes(s));
   }, [cliniciansQuery.data, clinicianSearch]);
 
   const addMutation = useMutation({
@@ -232,12 +232,12 @@ export default function SharedExercisesScreen() {
                   <Share2 size={18} color={Colors.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{se.exercise_library?.title || 'Unknown'}</Text>
-                  {se.exercise_library?.title_zh && (
-                    <Text style={styles.cardTitleZh}>{se.exercise_library.title_zh}</Text>
+                  <Text style={styles.cardTitle}>{se.exercise_library?.title_en || 'Unknown'}</Text>
+                  {se.exercise_library?.title_zh_hant && (
+                    <Text style={styles.cardTitleZh}>{se.exercise_library.title_zh_hant}</Text>
                   )}
                   <Text style={styles.cardClinician}>
-                    → {se.clinicians?.name || 'Unknown'}{se.clinicians?.name_zh ? ` ${se.clinicians.name_zh}` : ''}
+                    → {se.clinicians?.full_name || 'Unknown'}{se.clinicians?.full_name_zh ? ` ${se.clinicians.full_name_zh}` : ''}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => confirmDelete(se.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -286,7 +286,7 @@ export default function SharedExercisesScreen() {
                   onPress={() => setSelectedExerciseId(e.id)}
                 >
                   <Text style={[styles.pickerItemText, selectedExerciseId === e.id && styles.pickerItemTextActive]} numberOfLines={1}>
-                    {e.title}{e.title_zh ? ` ${e.title_zh}` : ''}
+                    {e.title_en}{e.title_zh_hant ? ` ${e.title_zh_hant}` : ''}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -308,7 +308,7 @@ export default function SharedExercisesScreen() {
                   onPress={() => setSelectedClinicianId(c.id)}
                 >
                   <Text style={[styles.pickerItemText, selectedClinicianId === c.id && styles.pickerItemTextActive]} numberOfLines={1}>
-                    {c.name}{c.name_zh ? ` ${c.name_zh}` : ''} — {c.email}
+                    {c.full_name}{c.full_name_zh ? ` ${c.full_name_zh}` : ''} — {c.email}
                   </Text>
                 </TouchableOpacity>
               ))}

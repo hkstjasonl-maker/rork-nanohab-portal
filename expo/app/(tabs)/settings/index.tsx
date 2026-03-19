@@ -51,7 +51,7 @@ export default function SettingsScreen() {
 
   const displayName = isAdmin
     ? 'Administrator 管理員'
-    : clinician?.name || 'Clinician';
+    : clinician?.full_name || 'Clinician';
   const displayEmail = isAdmin
     ? adminUser?.email
     : clinician?.email;
@@ -72,8 +72,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
-            {clinician?.name_zh && (
-              <Text style={styles.profileNameZh}>{clinician.name_zh}</Text>
+            {clinician?.full_name_zh && (
+              <Text style={styles.profileNameZh}>{clinician.full_name_zh}</Text>
             )}
             <View style={styles.rolePill}>
               <Shield size={12} color={Colors.accent} />
@@ -92,11 +92,11 @@ export default function SettingsScreen() {
               label="Email 電郵"
               value={displayEmail || '-'}
             />
-            {!isAdmin && clinician?.clinic_name && (
+            {!isAdmin && clinician?.organization && (
               <SettingsRow
                 icon={<Building2 size={18} color={Colors.accent} />}
-                label="Clinic 診所"
-                value={`${clinician.clinic_name}${clinician.clinic_name_zh ? ` ${clinician.clinic_name_zh}` : ''}`}
+                label="Organization 機構"
+                value={`${clinician.organization}${clinician.organization_zh ? ` ${clinician.organization_zh}` : ''}`}
               />
             )}
           </View>

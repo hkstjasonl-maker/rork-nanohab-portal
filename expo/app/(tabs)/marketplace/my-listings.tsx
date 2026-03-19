@@ -216,8 +216,8 @@ const MyListingCard = React.memo(function MyListingCard({
   listing: MarketplaceListing;
   activeRentals: number;
 }) {
-  const title = listing.title || listing.exercise_library?.title || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh;
+  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
   const approvalInfo = getApprovalInfo(listing.approval_status);
   const rate = listing.hkd_per_day ?? 0;
   const earned = listing.total_earned ?? 0;
@@ -292,7 +292,7 @@ function NewListingModal({
         .select('*')
         .eq('created_by_clinician_id', clinicianId)
         .eq('media_status', 'active')
-        .order('title', { ascending: true });
+        .order('title_en', { ascending: true });
 
       if (error) {
         console.log('Listable exercises error:', error);
@@ -311,10 +311,10 @@ function NewListingModal({
       const end = endDate.trim() || new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0];
 
       const { error } = await supabase.from('marketplace_listings').insert({
-        exercise_id: selectedExercise.id,
+        exercise_library_id: selectedExercise.id,
         clinician_id: clinicianId,
-        title: title.trim() || selectedExercise.title,
-        title_zh: titleZh.trim() || selectedExercise.title_zh || null,
+        title: title.trim() || selectedExercise.title_en,
+        title_zh: titleZh.trim() || selectedExercise.title_zh_hant || null,
         description: description.trim() || null,
         description_zh: descriptionZh.trim() || null,
         contraindications: contraindications.trim() || null,
@@ -399,15 +399,15 @@ function NewListingModal({
                   style={[styles.exercisePickerItem, selectedExercise?.id === ex.id && styles.exercisePickerItemSelected]}
                   onPress={() => {
                     setSelectedExercise(ex);
-                    if (!title.trim()) setTitle(ex.title || '');
-                    if (!titleZh.trim()) setTitleZh(ex.title_zh || '');
+                    if (!title.trim()) setTitle(ex.title_en || '');
+                    if (!titleZh.trim()) setTitleZh(ex.title_zh_hant || '');
                   }}
                 >
                   <Text
                     style={[styles.exercisePickerText, selectedExercise?.id === ex.id && styles.exercisePickerTextSelected]}
                     numberOfLines={2}
                   >
-                    {ex.title}
+                    {ex.title_en}
                   </Text>
                   {selectedExercise?.id === ex.id && <Check size={14} color={Colors.white} />}
                 </TouchableOpacity>

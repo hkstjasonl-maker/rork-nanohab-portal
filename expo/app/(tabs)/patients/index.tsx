@@ -67,8 +67,8 @@ export default function PatientsScreen() {
     const lower = searchText.toLowerCase();
     return patientsQuery.data.filter(
       (p) =>
-        p.name?.toLowerCase().includes(lower) ||
-        p.name_zh?.toLowerCase().includes(lower) ||
+        p.patient_name?.toLowerCase().includes(lower) ||
+        p.patient_name_zh?.toLowerCase().includes(lower) ||
         p.access_code?.toLowerCase().includes(lower) ||
         p.diagnosis?.toLowerCase().includes(lower)
     );
@@ -97,7 +97,7 @@ export default function PatientsScreen() {
       const actionZh = patient.is_frozen ? '解凍' : '凍結';
       Alert.alert(
         `${action.charAt(0).toUpperCase() + action.slice(1)} Patient ${actionZh}患者`,
-        `Are you sure you want to ${action} ${patient.name}?\n確定要${actionZh} ${patient.name} 嗎？`,
+        `Are you sure you want to ${action} ${patient.patient_name}?\n確定要${actionZh} ${patient.patient_name} 嗎？`,
         [
           { text: 'Cancel 取消', style: 'cancel' },
           {
@@ -233,13 +233,13 @@ const PatientCard = React.memo(function PatientCard({
       <View style={styles.patientCardLeft}>
         <View style={[styles.avatarCircle, patient.is_frozen && styles.avatarCircleFrozen]}>
           <Text style={styles.avatarText}>
-            {(patient.name || '?').charAt(0).toUpperCase()}
+            {(patient.patient_name || '?').charAt(0).toUpperCase()}
           </Text>
         </View>
         <View style={styles.patientInfo}>
           <Text style={styles.patientName} numberOfLines={1}>
-            {patient.name}
-            {patient.name_zh ? ` ${patient.name_zh}` : ''}
+            {patient.patient_name}
+            {patient.patient_name_zh ? ` ${patient.patient_name_zh}` : ''}
           </Text>
           <Text style={styles.patientCode}>{patient.access_code}</Text>
           {patient.diagnosis && (
@@ -308,8 +308,8 @@ function AddPatientModal({
     mutationFn: async () => {
       const accessCode = generateAccessCode();
       const { error } = await supabase.from('patients').insert({
-        name: name.trim(),
-        name_zh: nameZh.trim() || null,
+        patient_name: name.trim(),
+        patient_name_zh: nameZh.trim() || null,
         access_code: accessCode,
         diagnosis: diagnosis.trim() || null,
         gender: gender.trim() || null,

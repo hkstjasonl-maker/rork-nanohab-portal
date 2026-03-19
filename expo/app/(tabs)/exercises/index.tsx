@@ -99,7 +99,7 @@ export default function ExercisesScreen() {
       const [sharedRes, ownRes] = await Promise.all([
         supabase
           .from('shared_exercises')
-          .select('exercise_id, exercise_library(*)')
+          .select('exercise_library_id, exercise_library(*)')
           .eq('clinician_id', clinician.id),
         supabase
           .from('exercise_library')
@@ -116,7 +116,7 @@ export default function ExercisesScreen() {
       }
 
       const sharedExercises: Exercise[] = (sharedRes.data || [])
-        .map((se: { exercise_id: string; exercise_library: unknown }) => {
+        .map((se: { exercise_library_id: string; exercise_library: unknown }) => {
           const ex = se.exercise_library as Exercise | null;
           if (ex) return { ...ex, is_shared: true };
           return null;
@@ -151,8 +151,8 @@ export default function ExercisesScreen() {
       const lower = searchText.toLowerCase();
       result = result.filter(
         (e) =>
-          e.title?.toLowerCase().includes(lower) ||
-          e.title_zh?.toLowerCase().includes(lower) ||
+          e.title_en?.toLowerCase().includes(lower) ||
+          e.title_zh_hant?.toLowerCase().includes(lower) ||
           e.category?.toLowerCase().includes(lower)
       );
     }
@@ -319,8 +319,8 @@ const ExerciseCard = React.memo(function ExerciseCard({
   const statusInfo = getMediaStatusInfo(exercise.media_status);
   const isOwn = exercise.created_by_clinician_id === clinicianId;
   const isShared = exercise.is_shared && !isOwn;
-  const durationMin = exercise.duration_seconds
-    ? Math.ceil(exercise.duration_seconds / 60)
+  const durationMin = exercise.default_duration_minutes
+    ? exercise.default_duration_minutes
     : null;
 
   return (
@@ -334,8 +334,8 @@ const ExerciseCard = React.memo(function ExerciseCard({
         <View style={styles.exerciseCardTitleRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.exerciseTitle} numberOfLines={2}>
-              {exercise.title}
-              {exercise.title_zh ? ` ${exercise.title_zh}` : ''}
+              {exercise.title_en}
+              {exercise.title_zh_hant ? ` ${exercise.title_zh_hant}` : ''}
             </Text>
           </View>
           <ChevronRight size={16} color={Colors.textTertiary} />
@@ -369,19 +369,19 @@ const ExerciseCard = React.memo(function ExerciseCard({
 
       <View style={styles.exerciseCardBottom}>
         <View style={styles.mediaBadges}>
-          {exercise.vimeo_url && (
+          {exercise.vimeo_video_id && (
             <View style={styles.mediaBadge}>
               <Video size={12} color={Colors.accent} />
               <Text style={styles.mediaBadgeText}>Vimeo</Text>
             </View>
           )}
-          {exercise.youtube_url && (
+          {exercise.youtube_video_id && (
             <View style={styles.mediaBadge}>
               <Video size={12} color="#FF0000" />
               <Text style={styles.mediaBadgeText}>YouTube</Text>
             </View>
           )}
-          {exercise.audio_url && (
+          {exercise.audio_instruction_url_en && (
             <View style={styles.mediaBadge}>
               <Headphones size={12} color={Colors.success} />
               <Text style={styles.mediaBadgeText}>Audio</Text>
@@ -506,14 +506,14 @@ function AddExerciseModal({
       const { data: inserted, error } = await supabase
         .from('exercise_library')
         .insert({
-          title: title.trim(),
-          title_zh: titleZh.trim() || null,
+          title_en: title.trim(),
+          title_zh_hant: titleZh.trim() || null,
           category: category.trim() || null,
-          description: description.trim() || null,
-          description_zh: descriptionZh.trim() || null,
-          duration_seconds: durationSeconds ? parseInt(durationSeconds, 10) : null,
-          vimeo_url: _isAdmin ? (vimeoUrl.trim() || null) : null,
-          youtube_url: _isAdmin ? (youtubeUrl.trim() || null) : null,
+          description_en: description.trim() || null,
+          description_zh_hant: descriptionZh.trim() || null,
+          default_duration_minutes: durationSeconds ? parseInt(durationSeconds, 10) : null,
+          vimeo_video_id: _isAdmin ? (vimeoUrl.trim() || null) : null,
+          youtube_video_id: _isAdmin ? (youtubeUrl.trim() || null) : null,
           media_status: mediaStatus,
           created_by_clinician_id: clinicianId || null,
           is_active: true,
@@ -525,7 +525,7 @@ function AddExerciseModal({
 
       if (isClinician && inserted && mediaRequestSubmitted) {
         const mediaRequest: Omit<ExerciseMediaRequest, 'id' | 'created_at' | 'status'> = {
-          exercise_id: inserted.id,
+          exercise_library_id: inserted.id,
           clinician_id: clinicianId!,
           video_url: mrVideoUrl.trim() || undefined,
           video_required: mrVideoRequired,

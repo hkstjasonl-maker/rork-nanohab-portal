@@ -49,8 +49,8 @@ export default function PatientDetailScreen() {
         .single();
       if (error) throw error;
       const p = data as Patient;
-      setName(p.name || '');
-      setNameZh(p.name_zh || '');
+      setName(p.patient_name || '');
+      setNameZh(p.patient_name_zh || '');
       setDiagnosis(p.diagnosis || '');
       setDiagnosisZh(p.diagnosis_zh || '');
       setGender(p.gender || '');
@@ -69,8 +69,8 @@ export default function PatientDetailScreen() {
       const { error } = await supabase
         .from('patients')
         .update({
-          name: name.trim(),
-          name_zh: nameZh.trim() || null,
+          patient_name: name.trim(),
+          patient_name_zh: nameZh.trim() || null,
           diagnosis: diagnosis.trim() || null,
           diagnosis_zh: diagnosisZh.trim() || null,
           gender: gender.trim() || null,
@@ -177,7 +177,7 @@ export default function PatientDetailScreen() {
     >
       <Stack.Screen
         options={{
-          title: patient.name || 'Patient',
+          title: patient.patient_name || 'Patient',
           headerShown: true,
           headerStyle: { backgroundColor: '#F2F0ED' },
           headerTintColor: Colors.text,
@@ -205,7 +205,7 @@ export default function PatientDetailScreen() {
         <View style={styles.statusSection}>
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarLargeText}>
-              {(patient.name || '?').charAt(0).toUpperCase()}
+              {(patient.patient_name || '?').charAt(0).toUpperCase()}
             </Text>
           </View>
           <Text style={styles.accessCode}>{patient.access_code}</Text>

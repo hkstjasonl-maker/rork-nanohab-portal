@@ -76,9 +76,9 @@ export default function ProgramsScreen() {
       console.log('Fetching patients for program builder');
       let query = supabase
         .from('patients')
-        .select('id, name, name_zh, access_code, is_frozen')
+        .select('id, patient_name, patient_name_zh, access_code, is_frozen')
         .eq('is_frozen', false)
-        .order('name', { ascending: true });
+        .order('patient_name', { ascending: true });
 
       if (!isAdmin && clinician?.id) {
         query = query.eq('clinician_id', clinician.id);
@@ -89,7 +89,7 @@ export default function ProgramsScreen() {
         console.log('Program patients fetch error:', error);
         throw error;
       }
-      return (data || []) as Pick<Patient, 'id' | 'name' | 'name_zh' | 'access_code' | 'is_frozen'>[];
+      return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
     },
     enabled: canViewPrograms,
   });
@@ -252,8 +252,8 @@ export default function ProgramsScreen() {
             <Text style={styles.patientSelectorLabel}>Select Patient 選擇患者</Text>
             {selectedPatient ? (
               <Text style={styles.patientSelectorValue} numberOfLines={1}>
-                {selectedPatient.name}
-                {selectedPatient.name_zh ? ` ${selectedPatient.name_zh}` : ''}
+                {selectedPatient.patient_name}
+                {selectedPatient.patient_name_zh ? ` ${selectedPatient.patient_name_zh}` : ''}
                 <Text style={styles.patientSelectorCode}> ({selectedPatient.access_code})</Text>
               </Text>
             ) : (
@@ -451,7 +451,7 @@ function PatientPickerModal({
   onClose,
 }: {
   visible: boolean;
-  patients: Pick<Patient, 'id' | 'name' | 'name_zh' | 'access_code' | 'is_frozen'>[];
+  patients: Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClose: () => void;
@@ -462,8 +462,8 @@ function PatientPickerModal({
     const lower = search.toLowerCase();
     return patients.filter(
       (p) =>
-        p.name?.toLowerCase().includes(lower) ||
-        p.name_zh?.toLowerCase().includes(lower) ||
+        p.patient_name?.toLowerCase().includes(lower) ||
+        p.patient_name_zh?.toLowerCase().includes(lower) ||
         p.access_code?.toLowerCase().includes(lower)
     );
   }, [patients, search]);
@@ -507,8 +507,8 @@ function PatientPickerModal({
                     ]}
                     numberOfLines={1}
                   >
-                    {patient.name}
-                    {patient.name_zh ? ` ${patient.name_zh}` : ''}
+                    {patient.patient_name}
+                    {patient.patient_name_zh ? ` ${patient.patient_name_zh}` : ''}
                   </Text>
                   <Text style={styles.pickerOptionCode}>{patient.access_code}</Text>
                 </View>
@@ -580,10 +580,10 @@ function ProgramFormModal({
     if (existingExercisesQuery.data && !exercisesLoaded) {
       const items: ProgramExerciseItem[] = existingExercisesQuery.data.map((pe) => ({
         id: pe.id,
-        exercise_id: pe.exercise_id,
-        title: pe.exercise_library?.title || 'Unknown',
-        title_zh: pe.exercise_library?.title_zh,
-        duration_seconds: pe.exercise_library?.duration_seconds,
+        exercise_id: pe.exercise_library_id,
+        title: pe.exercise_library?.title_en || 'Unknown',
+        title_zh: pe.exercise_library?.title_zh_hant,
+        duration_seconds: pe.exercise_library?.default_duration_minutes ? pe.exercise_library.default_duration_minutes * 60 : undefined,
         sort_order: pe.sort_order,
         dosage: pe.dosage || '',
         dosage_sets: String(pe.dosage_sets ?? ''),
@@ -618,9 +618,9 @@ function ProgramFormModal({
         {
           id: undefined,
           exercise_id: exercise.id,
-          title: exercise.title,
-          title_zh: exercise.title_zh,
-          duration_seconds: exercise.duration_seconds,
+          title: exercise.title_en,
+          title_zh: exercise.title_zh_hant,
+          duration_seconds: exercise.default_duration_minutes ? exercise.default_duration_minutes * 60 : undefined,
           sort_order: prev.length,
           dosage: '',
           dosage_sets: '',
@@ -702,7 +702,7 @@ function ProgramFormModal({
       if (programExercises.length > 0) {
         const exerciseRows = programExercises.map((pe, idx) => ({
           program_id: programId,
-          exercise_id: pe.exercise_id,
+          exercise_library_id: pe.exercise_id,
           sort_order: idx,
           dosage: pe.dosage.trim() || null,
           dosage_sets: pe.dosage_sets ? parseInt(pe.dosage_sets, 10) : null,
@@ -1088,8 +1088,8 @@ function ExercisePickerModal({
     const lower = search.toLowerCase();
     return exercisesQuery.data.filter(
       (e) =>
-        e.title?.toLowerCase().includes(lower) ||
-        e.title_zh?.toLowerCase().includes(lower)
+        e.title_en?.toLowerCase().includes(lower) ||
+        e.title_zh_hant?.toLowerCase().includes(lower)
     );
   }, [exercisesQuery.data, search]);
 
@@ -1142,16 +1142,16 @@ function ExercisePickerModal({
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.exercisePickerTitle} numberOfLines={1}>
-                      {item.title}
-                      {item.title_zh ? ` ${item.title_zh}` : ''}
+                      {item.title_en}
+                      {item.title_zh_hant ? ` ${item.title_zh_hant}` : ''}
                     </Text>
                     <View style={styles.exercisePickerMeta}>
                       {item.category && (
                         <Text style={styles.exercisePickerCategory}>{item.category}</Text>
                       )}
-                      {item.duration_seconds && (
+                      {item.default_duration_minutes && (
                         <Text style={styles.exercisePickerDuration}>
-                          {Math.ceil(item.duration_seconds / 60)} min
+                          {item.default_duration_minutes} min
                         </Text>
                       )}
                     </View>

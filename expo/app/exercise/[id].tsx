@@ -85,14 +85,14 @@ export default function ExerciseDetailScreen() {
   useEffect(() => {
     if (exerciseQuery.data) {
       const e = exerciseQuery.data;
-      setTitle(e.title || '');
-      setTitleZh(e.title_zh || '');
+      setTitle(e.title_en || '');
+      setTitleZh(e.title_zh_hant || '');
       setCategory(e.category || '');
-      setDescription(e.description || '');
-      setDescriptionZh(e.description_zh || '');
-      setDurationSeconds(e.duration_seconds ? String(e.duration_seconds) : '');
-      setVimeoUrl(e.vimeo_url || '');
-      setYoutubeUrl(e.youtube_url || '');
+      setDescription(e.description_en || '');
+      setDescriptionZh(e.description_zh_hant || '');
+      setDurationSeconds(e.default_duration_minutes ? String(e.default_duration_minutes) : '');
+      setVimeoUrl(e.vimeo_video_id || '');
+      setYoutubeUrl(e.youtube_video_id || '');
     }
   }, [exerciseQuery.data]);
 
@@ -107,14 +107,14 @@ export default function ExerciseDetailScreen() {
       const { error } = await supabase
         .from('exercise_library')
         .update({
-          title: title.trim(),
-          title_zh: titleZh.trim() || null,
+          title_en: title.trim(),
+          title_zh_hant: titleZh.trim() || null,
           category: category.trim() || null,
-          description: description.trim() || null,
-          description_zh: descriptionZh.trim() || null,
-          duration_seconds: durationSeconds ? parseInt(durationSeconds, 10) : null,
-          vimeo_url: vimeoUrl.trim() || null,
-          youtube_url: youtubeUrl.trim() || null,
+          description_en: description.trim() || null,
+          description_zh_hant: descriptionZh.trim() || null,
+          default_duration_minutes: durationSeconds ? parseInt(durationSeconds, 10) : null,
+          vimeo_video_id: vimeoUrl.trim() || null,
+          youtube_video_id: youtubeUrl.trim() || null,
         })
         .eq('id', id);
       if (error) throw error;
@@ -166,7 +166,7 @@ export default function ExerciseDetailScreen() {
     >
       <Stack.Screen
         options={{
-          title: exercise.title || 'Exercise',
+          title: exercise.title_en || 'Exercise',
           headerShown: true,
           headerBackTitle: 'Back',
           headerRight: canEdit
@@ -208,29 +208,29 @@ export default function ExerciseDetailScreen() {
         </View>
 
         <View style={styles.mediaRow}>
-          {exercise.vimeo_url && (
+          {exercise.vimeo_video_id && (
             <View style={styles.mediaTag}>
               <Video size={14} color={Colors.accent} />
               <Text style={styles.mediaTagText}>Vimeo</Text>
             </View>
           )}
-          {exercise.youtube_url && (
+          {exercise.youtube_video_id && (
             <View style={styles.mediaTag}>
               <Video size={14} color="#FF0000" />
               <Text style={styles.mediaTagText}>YouTube</Text>
             </View>
           )}
-          {exercise.audio_url && (
+          {exercise.audio_instruction_url_en && (
             <View style={styles.mediaTag}>
               <Headphones size={14} color={Colors.success} />
               <Text style={styles.mediaTagText}>Audio</Text>
             </View>
           )}
-          {exercise.duration_seconds && (
+          {exercise.default_duration_minutes && (
             <View style={styles.mediaTag}>
               <Clock size={14} color={Colors.textSecondary} />
               <Text style={styles.mediaTagText}>
-                {Math.ceil(exercise.duration_seconds / 60)} min
+                {exercise.default_duration_minutes} min
               </Text>
             </View>
           )}
@@ -309,7 +309,7 @@ export default function ExerciseDetailScreen() {
             />
           </FieldRow>
 
-          <FieldRow label="Duration (seconds) 時長（秒）" editable={canEdit}>
+          <FieldRow label="Duration (minutes) 時長（分鐘）" editable={canEdit}>
             <TextInput
               style={[styles.input, !canEdit && styles.inputDisabled]}
               value={durationSeconds}
@@ -321,8 +321,8 @@ export default function ExerciseDetailScreen() {
             />
           </FieldRow>
 
-          {(canEdit || exercise.vimeo_url) && (
-            <FieldRow label="Vimeo URL" editable={canEdit}>
+          {(canEdit || exercise.vimeo_video_id) && (
+            <FieldRow label="Vimeo Video ID" editable={canEdit}>
               <TextInput
                 style={[styles.input, !canEdit && styles.inputDisabled]}
                 value={vimeoUrl}
@@ -336,8 +336,8 @@ export default function ExerciseDetailScreen() {
             </FieldRow>
           )}
 
-          {(canEdit || exercise.youtube_url) && (
-            <FieldRow label="YouTube URL" editable={canEdit}>
+          {(canEdit || exercise.youtube_video_id) && (
+            <FieldRow label="YouTube Video ID" editable={canEdit}>
               <TextInput
                 style={[styles.input, !canEdit && styles.inputDisabled]}
                 value={youtubeUrl}

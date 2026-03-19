@@ -33,7 +33,7 @@ import { supabase } from '@/lib/supabase';
 
 interface MediaRequest {
   id: string;
-  exercise_id: string;
+  exercise_library_id: string;
   clinician_id: string;
   video_url?: string;
   video_required: boolean;
@@ -44,8 +44,8 @@ interface MediaRequest {
   status: string;
   rejection_reason?: string;
   created_at: string;
-  exercise_library?: { title: string; title_zh?: string };
-  clinicians?: { name: string; name_zh?: string };
+  exercise_library?: { title_en: string; title_zh_hant?: string };
+  clinicians?: { full_name: string; full_name_zh?: string };
 }
 
 function getStatusBadge(status: string) {
@@ -72,7 +72,7 @@ export default function MediaRequestsScreen() {
       try {
         const { data, error } = await supabase
           .from('exercise_media_requests')
-          .select('*, exercise_library(title, title_zh), clinicians(name, name_zh)')
+          .select('*, exercise_library(title_en, title_zh_hant), clinicians(full_name, full_name_zh)')
           .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as MediaRequest[];
@@ -89,8 +89,8 @@ export default function MediaRequestsScreen() {
     if (!search.trim()) return requestsQuery.data;
     const s = search.toLowerCase();
     return requestsQuery.data.filter(r =>
-      r.exercise_library?.title?.toLowerCase().includes(s) ||
-      r.clinicians?.name?.toLowerCase().includes(s) ||
+      r.exercise_library?.title_en?.toLowerCase().includes(s) ||
+      r.clinicians?.full_name?.toLowerCase().includes(s) ||
       r.notes?.toLowerCase().includes(s)
     );
   }, [requestsQuery.data, search]);
@@ -214,8 +214,8 @@ export default function MediaRequestsScreen() {
               <View key={r.id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{r.exercise_library?.title || 'Unknown Exercise'}</Text>
-                    <Text style={styles.cardClinician}>by {r.clinicians?.name || 'Unknown'}{r.clinicians?.name_zh ? ` ${r.clinicians.name_zh}` : ''}</Text>
+                    <Text style={styles.cardTitle}>{r.exercise_library?.title_en || 'Unknown Exercise'}</Text>
+                    <Text style={styles.cardClinician}>by {r.clinicians?.full_name || 'Unknown'}{r.clinicians?.full_name_zh ? ` ${r.clinicians.full_name_zh}` : ''}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.label}</Text>
@@ -265,7 +265,7 @@ export default function MediaRequestsScreen() {
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.approveBtn}
-                      onPress={() => handleApprove(r.id, r.exercise_id)}
+                      onPress={() => handleApprove(r.id, r.exercise_library_id)}
                       disabled={approveMutation.isPending}
                     >
                       <CheckCircle size={16} color={Colors.white} />
@@ -273,7 +273,7 @@ export default function MediaRequestsScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.rejectBtn}
-                      onPress={() => handleRejectOpen(r.id, r.exercise_id)}
+                      onPress={() => handleRejectOpen(r.id, r.exercise_library_id)}
                     >
                       <XCircle size={16} color={Colors.white} />
                       <Text style={styles.actionBtnText}>Reject</Text>

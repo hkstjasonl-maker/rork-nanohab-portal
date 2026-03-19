@@ -159,7 +159,7 @@ export default function DashboardScreen() {
 
   const userName = isAdmin
     ? 'Administrator'
-    : clinician?.name || 'Clinician';
+    : clinician?.full_name || 'Clinician';
 
   const greeting = getGreeting();
 
