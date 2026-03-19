@@ -65,11 +65,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           .eq('id', parsed.clinicianId)
           .single();
         if (data && data.is_active !== false) {
-          setClinician(data as Clinician);
+          const c = data as Clinician;
+          setClinician(c);
           setRole('clinician');
           setIsAuthenticated(true);
-          if (data.tier_id) {
-            void loadClinicianTier(data.tier_id);
+          setNeedsAgreement(!c.agreement_accepted_at);
+          if (c.tier_id) {
+            void loadClinicianTier(c.tier_id);
           }
         } else {
           await AsyncStorage.removeItem(AUTH_STORAGE_KEY);

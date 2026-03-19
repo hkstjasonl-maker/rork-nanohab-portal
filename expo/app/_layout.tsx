@@ -13,7 +13,7 @@ void SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, needsAgreement, role } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -21,13 +21,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === 'login';
+    const inAgreement = segments[0] === 'agreement';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/login');
     } else if (isAuthenticated && inAuthGroup) {
+      if (role === 'clinician' && needsAgreement) {
+        router.replace('/agreement');
+      } else {
+        router.replace('/');
+      }
+    } else if (isAuthenticated && role === 'clinician' && needsAgreement && !inAgreement) {
+      router.replace('/agreement');
+    } else if (isAuthenticated && inAgreement && !needsAgreement) {
       router.replace('/');
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isLoading, needsAgreement, role, segments, router]);
 
   if (isLoading) {
     return (
@@ -54,6 +63,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="agreement" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen
         name="patient/[id]"
         options={{
