@@ -1,9 +1,12 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store } from 'lucide-react-native';
+import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store, Shield } from 'lucide-react-native';
 import React from 'react';
 import Colors from '@/constants/colors';
+import { useAuth } from '@/lib/auth';
 
 export default function TabLayout() {
+  const { isAdmin } = useAuth();
+
   return (
     <Tabs
       screenOptions={{
@@ -53,6 +56,14 @@ export default function TabLayout() {
         options={{
           title: 'Market',
           tabBarIcon: ({ color, size }) => <Store size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
+          href: isAdmin ? '/admin' : null,
         }}
       />
       <Tabs.Screen

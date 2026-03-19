@@ -56,6 +56,18 @@ A professional clinical exercise prescription management portal for speech-langu
 - **My Listings**: List of clinician's own listings with approval status, active rental count, total earned. "List New Exercise" button (only exercises owned with `media_status = 'active'`). Submit creates listing with `approval_status = 'pending'`.
 - **Rental Logbook**: Two tabs — "My Rentals" (exercises renting via `marketplace_rentals WHERE renting_clinician_id = me`) and "My Listings" (rental requests for own exercises). Shows status badges, dates, fees, actions (extend, cancel, review, dispute).
 
+### Admin Hub (Admin-only)
+- Conditionally visible Admin tab (Shield icon) — only shown when `isAdmin === true`
+- Scrollable grid of admin section cards with bilingual labels and count badges
+- **Clinician Management**: Full CRUD for clinicians table with search, tier picker, is_active/is_approved toggles, 10 permission override segmented controls (Default/Allow/Deny), reset password via SHA-256
+- **Notifications Management**: CRUD for notifications table with type badges (info/warning/success/alert), add/edit modal, delete with confirmation
+- **Media Requests**: List from `exercise_media_requests` joined with exercise & clinician info, approve/reject actions with reason input, updates exercise `media_status`
+- **User Feedback**: List from `user_feedback` with rating stars, status filter (All/New/Read/Resolved), detail view with admin notes and status change
+- **Organisations**: CRUD for organisations table (graceful fallback if table doesn't exist)
+- **Shared Exercises**: List from `shared_exercises` with exercise/clinician pickers, add via upsert on conflict, delete with confirmation
+- **Assessments**: List from `assessment_library` (graceful fallback if table doesn't exist), basic CRUD with category badges
+- **Placeholder screens**: Splash Ads, Therapist Settings, Managing Org, Marketing Draws, Flower Garden, Knowledge Videos — all show "Coming Soon 即將推出" with appropriate icons
+
 ### Settings
 - Profile info display
 - Logout button
@@ -67,7 +79,7 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Color scheme**: Clean white/light grey backgrounds with a warm orange accent (#E07A3A), dark text for readability
 - **Style**: Professional medical aesthetic — think clinical portal meets modern iOS design
 - **Cards**: Rounded white cards with subtle shadows, clear visual hierarchy
-- **Navigation**: Tab bar with Home, Patients, Exercises, Programs, Market, and Settings tabs
+- **Navigation**: Tab bar with Home, Patients, Exercises, Programs, Market, Admin (admin-only), and Settings tabs
 - **Typography**: Clean, legible fonts with bilingual support
 - **Anti-screenshot**: Screen capture prevention enabled app-wide
 
@@ -86,6 +98,15 @@ A professional clinical exercise prescription management portal for speech-langu
 9. **My Listings** — Clinician's own listings with stats, new listing form
 10. **Rental Logbook** — Two-tab view (My Rentals / My Listings rentals), actions: extend, cancel, review, dispute
 11. **Settings** — Profile section, logout, about info with disclaimers and credits
+12. **Admin Hub** — Grid of admin section cards (admin-only)
+13. **Clinician Management** — Full CRUD with search, tier picker, permission overrides
+14. **Notifications Management** — CRUD with type badges and delete confirmation
+15. **Media Requests** — Approve/reject media requests with status updates
+16. **User Feedback** — View/manage user feedback with status filter and admin notes
+17. **Organisations** — CRUD (or placeholder if table missing)
+18. **Shared Exercises** — Manage exercise-clinician sharing
+19. **Assessments** — CRUD (or placeholder if table missing)
+20. **Placeholder screens** — Splash Ads, Therapist Settings, Managing Org, Marketing Draws, Flower Garden, Knowledge Videos
 
 ---
 
