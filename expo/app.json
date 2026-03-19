@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.x3bj68r4jmtqfpiiy1r9h"
+      "bundleIdentifier": "com.dravive.nanohab.portal"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.x3bj68r4jmtqfpiiy1r9h"
+      "package": "com.dravive.nanohab.portal"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

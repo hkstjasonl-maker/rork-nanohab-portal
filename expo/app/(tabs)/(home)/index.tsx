@@ -50,15 +50,31 @@ export default function DashboardScreen() {
   const programsQuery = useQuery({
     queryKey: ['dashboard-programs', role, clinician?.id],
     queryFn: async () => {
-      let query = supabase
-        .from('exercise_programs')
-        .select('id', { count: 'exact' });
-
       if (!isAdmin && clinician?.id) {
-        query = query.eq('clinician_id', clinician.id);
+        const { data: patients, error: patientsError } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('clinician_id', clinician.id);
+        if (patientsError) {
+          console.log('Dashboard programs patients error:', patientsError);
+          return 0;
+        }
+        const patientIds = (patients || []).map((p: { id: string }) => p.id);
+        if (patientIds.length === 0) return 0;
+        const { count, error } = await supabase
+          .from('exercise_programs')
+          .select('id', { count: 'exact' })
+          .in('patient_id', patientIds);
+        if (error) {
+          console.log('Dashboard programs error:', error);
+          return 0;
+        }
+        return count || 0;
       }
 
-      const { count, error } = await query;
+      const { count, error } = await supabase
+        .from('exercise_programs')
+        .select('id', { count: 'exact' });
       if (error) {
         console.log('Dashboard programs error:', error);
         return 0;
@@ -71,7 +87,7 @@ export default function DashboardScreen() {
     queryKey: ['dashboard-media-requests'],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from('media_requests')
+        .from('exercise_media_requests')
         .select('id', { count: 'exact' })
         .eq('status', 'pending');
       if (error) {
@@ -87,9 +103,9 @@ export default function DashboardScreen() {
     queryKey: ['dashboard-rental-requests'],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from('rental_requests')
+        .from('marketplace_rentals')
         .select('id', { count: 'exact' })
-        .eq('status', 'pending');
+        .in('status', ['pending', 'cooling_off']);
       if (error) {
         console.log('Dashboard rental requests error:', error);
         return 0;
@@ -102,22 +118,27 @@ export default function DashboardScreen() {
   const notificationsQuery = useQuery({
     queryKey: ['dashboard-notifications', role, clinician?.id, adminUser?.id],
     queryFn: async () => {
-      let query = supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      try {
+        let query = supabase
+          .from('notifications')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
 
-      if (!isAdmin && clinician?.id) {
-        query = query.eq('clinician_id', clinician.id);
-      }
+        if (!isAdmin && clinician?.id) {
+          query = query.eq('clinician_id', clinician.id);
+        }
 
-      const { data, error } = await query;
-      if (error) {
-        console.log('Dashboard notifications error:', error);
+        const { data, error } = await query;
+        if (error) {
+          console.log('Dashboard notifications error:', error);
+          return [];
+        }
+        return (data || []) as Notification[];
+      } catch (e) {
+        console.log('Dashboard notifications exception:', e);
         return [];
       }
-      return (data || []) as Notification[];
     },
   });
 

@@ -117,6 +117,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     if (error || !data) throw new Error('Invalid email or password 電郵或密碼錯誤');
     if (data.is_active === false) throw new Error('Account is deactivated 帳戶已停用');
+    if (data.is_approved === false) throw new Error('Account pending approval 帳戶待批准');
 
     const c = data as Clinician;
     setClinician(c);

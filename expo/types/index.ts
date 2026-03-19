@@ -8,6 +8,9 @@ export interface Clinician {
   clinic_name_zh?: string;
   phone?: string;
   is_active?: boolean;
+  is_approved?: boolean;
+  agreement_accepted_at?: string;
+  interest_tags?: string[];
   created_at?: string;
   override_can_view_patients?: boolean | null;
   override_can_edit_patients?: boolean | null;
