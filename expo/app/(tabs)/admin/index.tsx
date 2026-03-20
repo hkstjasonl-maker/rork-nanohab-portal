@@ -49,14 +49,14 @@ const sections: AdminSection[] = [
   { key: 'notifications', titleEn: 'Notifications', titleZh: '通知管理', icon: <Bell size={ICON_SIZE} color={Colors.info} />, route: '/admin/notifications', countKey: 'notifications' },
   { key: 'media-requests', titleEn: 'Media Requests', titleZh: '媒體申請', icon: <ImagePlus size={ICON_SIZE} color={Colors.warning} />, route: '/admin/media-requests', countKey: 'media_requests' },
   { key: 'user-feedback', titleEn: 'User Feedback', titleZh: '用戶反饋', icon: <MessageSquare size={ICON_SIZE} color={Colors.success} />, route: '/admin/user-feedback', countKey: 'feedback' },
-  { key: 'organisations', titleEn: 'Organisations', titleZh: '合作機構', icon: <Building2 size={ICON_SIZE} color="#7C5CFC" />, route: '/admin/organisations' },
-  { key: 'splash-ads', titleEn: 'Splash Ads', titleZh: '啟動廣告', icon: <Megaphone size={ICON_SIZE} color="#E05C8A" />, route: '/admin/splash-ads' },
+  { key: 'organisations', titleEn: 'Organisations', titleZh: '合作機構', icon: <Building2 size={ICON_SIZE} color="#7C5CFC" />, route: '/admin/organisations', countKey: 'organisations' },
+  { key: 'splash-ads', titleEn: 'Splash Ads', titleZh: '啟動廣告', icon: <Megaphone size={ICON_SIZE} color="#E05C8A" />, route: '/admin/splash-ads', countKey: 'splash_ads' },
   { key: 'therapist-settings', titleEn: 'Therapist Settings', titleZh: '治療師設定', icon: <UserCog size={ICON_SIZE} color="#4A90D9" />, route: '/admin/therapist-settings' },
   { key: 'managing-org', titleEn: 'Managing Org', titleZh: '管理機構', icon: <Building size={ICON_SIZE} color="#6B8E6B" />, route: '/admin/managing-org' },
-  { key: 'marketing-draws', titleEn: 'Marketing Draws', titleZh: '行銷抽獎', icon: <Gift size={ICON_SIZE} color="#D4A030" />, route: '/admin/marketing-draws' },
-  { key: 'flower-garden', titleEn: 'Flower Garden', titleZh: '花田管理', icon: <Flower2 size={ICON_SIZE} color="#E07AAA" />, route: '/admin/flower-garden' },
-  { key: 'knowledge-videos', titleEn: 'Knowledge Videos', titleZh: '知識影片', icon: <Video size={ICON_SIZE} color="#5C7CFC" />, route: '/admin/knowledge-videos' },
-  { key: 'feeding-skills', titleEn: 'Feeding Skills', titleZh: '餵食技巧', icon: <Utensils size={ICON_SIZE} color="#E0903A" />, route: '/admin/feeding-skills' },
+  { key: 'marketing-draws', titleEn: 'Marketing Draws', titleZh: '行銷抽獎', icon: <Gift size={ICON_SIZE} color="#D4A030" />, route: '/admin/marketing-draws', countKey: 'marketing_campaigns' },
+  { key: 'flower-garden', titleEn: 'Flower Garden', titleZh: '花田管理', icon: <Flower2 size={ICON_SIZE} color="#E07AAA" />, route: '/admin/flower-garden', countKey: 'flower_types' },
+  { key: 'knowledge-videos', titleEn: 'Knowledge Videos', titleZh: '知識影片', icon: <Video size={ICON_SIZE} color="#5C7CFC" />, route: '/admin/knowledge-videos', countKey: 'knowledge_videos' },
+  { key: 'feeding-skills', titleEn: 'Feeding Skills', titleZh: '餵食技巧', icon: <Utensils size={ICON_SIZE} color="#E0903A" />, route: '/admin/feeding-skills', countKey: 'feeding_skill_videos' },
   { key: 'reinforcement', titleEn: 'Reinforcement', titleZh: '強化音訊', icon: <Volume2 size={ICON_SIZE} color="#5CA0E0" />, route: '/admin/reinforcement' },
   { key: 'shared-exercises', titleEn: 'Shared Exercises', titleZh: '共享運動', icon: <Share2 size={ICON_SIZE} color={Colors.accent} />, route: '/admin/shared-exercises', countKey: 'shared_exercises' },
   { key: 'assessments', titleEn: 'Assessments', titleZh: '評估庫', icon: <ClipboardCheck size={ICON_SIZE} color="#2EAADC" />, route: '/admin/assessments' },
@@ -94,6 +94,36 @@ export default function AdminHubScreen() {
         const { count: sharedCount } = await supabase.from('shared_exercises').select('*', { count: 'exact', head: true });
         counts.shared_exercises = sharedCount ?? 0;
       } catch (e) { console.log('Error fetching shared exercises count:', e); }
+
+      try {
+        const { count: splashCount } = await supabase.from('splash_ads').select('*', { count: 'exact', head: true }).eq('is_active', true);
+        counts.splash_ads = splashCount ?? 0;
+      } catch (e) { console.log('Error fetching splash ads count:', e); }
+
+      try {
+        const { count: knowledgeCount } = await supabase.from('knowledge_videos').select('*', { count: 'exact', head: true });
+        counts.knowledge_videos = knowledgeCount ?? 0;
+      } catch (e) { console.log('Error fetching knowledge videos count:', e); }
+
+      try {
+        const { count: feedingCount } = await supabase.from('feeding_skill_videos').select('*', { count: 'exact', head: true });
+        counts.feeding_skill_videos = feedingCount ?? 0;
+      } catch (e) { console.log('Error fetching feeding skill videos count:', e); }
+
+      try {
+        const { count: campaignCount } = await supabase.from('marketing_campaigns').select('*', { count: 'exact', head: true }).eq('is_active', true);
+        counts.marketing_campaigns = campaignCount ?? 0;
+      } catch (e) { console.log('Error fetching marketing campaigns count:', e); }
+
+      try {
+        const { count: flowerCount } = await supabase.from('flower_types').select('*', { count: 'exact', head: true });
+        counts.flower_types = flowerCount ?? 0;
+      } catch (e) { console.log('Error fetching flower types count:', e); }
+
+      try {
+        const { count: orgCount } = await supabase.from('organisations').select('*', { count: 'exact', head: true });
+        counts.organisations = orgCount ?? 0;
+      } catch (e) { console.log('Error fetching organisations count:', e); }
 
       return counts;
     },

@@ -72,7 +72,8 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Flower Garden**: Two-tab admin screen — "Flower Types" tab with full CRUD for `flower_types` table (rarity badges, image preview, weight); "Patient Flowers" tab with read-only list from `patient_flowers` joined with patients and flower types (rarity, acquired method, stolen status)
 - **Marketing Draws**: Two-tab admin screen — "Campaigns" tab with full CRUD for `marketing_campaigns` table (trigger badges, date range, max draws/day); "Prizes" tab with full CRUD for `marketing_prizes` filtered by selected campaign (prize type, quantity remaining/total, probability weight, expiry)
 - **Reinforcement Audio**: Full CRUD for `reinforcement_audio_library` table — list with source badges (YouTube EN/繁/简, Audio EN/繁/简), is_default gold badge; add/edit modal with all YouTube IDs and audio URLs
-- **Placeholder screens**: Therapist Settings, Managing Org — show "Coming Soon 即將推出" with appropriate icons
+- **Therapist Settings**: Per-patient therapist name/photo management — list all patients with current therapist_name_en/zh and photo/cartoon thumbnails; tap to edit modal with URL inputs and preview
+- **Managing Org**: Two-section screen — "Default Org Settings" form (reads/writes app_config table for default org name/logo) with "Apply to All" bulk update; "Per-Patient Overrides" list with search, tap to edit individual patient's managing_org fields
 
 ### Settings
 - Profile info display
@@ -118,7 +119,8 @@ A professional clinical exercise prescription management portal for speech-langu
 23. **Flower Garden** — Two-tab view: Flower Types CRUD (rarity, weight, image) + Patient Flowers read-only list
 24. **Marketing Draws** — Two-tab view: Campaigns CRUD (triggers, date range) + Prizes CRUD (filtered by campaign)
 25. **Reinforcement Audio** — Full CRUD for reinforcement audio library with multilingual YouTube IDs and audio URLs
-26. **Placeholder screens** — Therapist Settings, Managing Org
+26. **Therapist Settings** — Patient list with therapist name/photo per patient, edit modal for therapist_name_en/zh + photo/cartoon URLs
+27. **Managing Org** — Default org config section + per-patient org override list with edit modal and bulk apply
 
 ---
 
