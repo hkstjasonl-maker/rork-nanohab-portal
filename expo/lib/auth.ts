@@ -154,6 +154,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setAdminUser(null);
       setClinician(null);
       setClinicianTier(null);
+      setNeedsAgreement(false);
     }
   }, [role]);
 
@@ -191,3 +192,4 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setNeedsAgreement,
   }), [isAuthenticated, isLoading, role, isAdmin, adminUser, clinician, clinicianTier, needsAgreement, loginAdmin, loginClinician, logout, clinicianCan]);
 });
+
