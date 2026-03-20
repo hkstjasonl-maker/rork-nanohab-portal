@@ -69,7 +69,10 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Splash Ads**: Full CRUD for `splash_ads` table — list with thumbnails, target type badges, date ranges, active toggle; add/edit modal with all fields
 - **Knowledge Videos**: Full CRUD for `knowledge_videos` table — list with YouTube/Vimeo thumbnails, category badges, duration, creator info; bilingual add/edit modal
 - **Feeding Skills**: Full CRUD for `feeding_skill_videos` table — list with video thumbnails, category badges, creator info; bilingual add/edit modal
-- **Placeholder screens**: Therapist Settings, Managing Org, Marketing Draws, Flower Garden — all show "Coming Soon 即將推出" with appropriate icons
+- **Flower Garden**: Two-tab admin screen — "Flower Types" tab with full CRUD for `flower_types` table (rarity badges, image preview, weight); "Patient Flowers" tab with read-only list from `patient_flowers` joined with patients and flower types (rarity, acquired method, stolen status)
+- **Marketing Draws**: Two-tab admin screen — "Campaigns" tab with full CRUD for `marketing_campaigns` table (trigger badges, date range, max draws/day); "Prizes" tab with full CRUD for `marketing_prizes` filtered by selected campaign (prize type, quantity remaining/total, probability weight, expiry)
+- **Reinforcement Audio**: Full CRUD for `reinforcement_audio_library` table — list with source badges (YouTube EN/繁/简, Audio EN/繁/简), is_default gold badge; add/edit modal with all YouTube IDs and audio URLs
+- **Placeholder screens**: Therapist Settings, Managing Org — show "Coming Soon 即將推出" with appropriate icons
 
 ### Settings
 - Profile info display
@@ -112,7 +115,10 @@ A professional clinical exercise prescription management portal for speech-langu
 20. **Splash Ads** — Full CRUD with thumbnail preview, target type picker, date range, active toggle
 21. **Knowledge Videos** — Full CRUD with YouTube/Vimeo preview, bilingual fields, tags, creator/provider info
 22. **Feeding Skills** — Full CRUD for feeding skill videos with bilingual fields, tags, category
-23. **Placeholder screens** — Therapist Settings, Managing Org, Marketing Draws, Flower Garden
+23. **Flower Garden** — Two-tab view: Flower Types CRUD (rarity, weight, image) + Patient Flowers read-only list
+24. **Marketing Draws** — Two-tab view: Campaigns CRUD (triggers, date range) + Prizes CRUD (filtered by campaign)
+25. **Reinforcement Audio** — Full CRUD for reinforcement audio library with multilingual YouTube IDs and audio URLs
+26. **Placeholder screens** — Therapist Settings, Managing Org
 
 ---
 

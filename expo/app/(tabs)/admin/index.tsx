@@ -25,6 +25,7 @@ import {
   Share2,
   Utensils,
   ClipboardCheck,
+  Volume2,
   Shield,
   ChevronRight,
 } from 'lucide-react-native';
@@ -56,6 +57,7 @@ const sections: AdminSection[] = [
   { key: 'flower-garden', titleEn: 'Flower Garden', titleZh: '花田管理', icon: <Flower2 size={ICON_SIZE} color="#E07AAA" />, route: '/admin/flower-garden' },
   { key: 'knowledge-videos', titleEn: 'Knowledge Videos', titleZh: '知識影片', icon: <Video size={ICON_SIZE} color="#5C7CFC" />, route: '/admin/knowledge-videos' },
   { key: 'feeding-skills', titleEn: 'Feeding Skills', titleZh: '餵食技巧', icon: <Utensils size={ICON_SIZE} color="#E0903A" />, route: '/admin/feeding-skills' },
+  { key: 'reinforcement', titleEn: 'Reinforcement', titleZh: '強化音訊', icon: <Volume2 size={ICON_SIZE} color="#5CA0E0" />, route: '/admin/reinforcement' },
   { key: 'shared-exercises', titleEn: 'Shared Exercises', titleZh: '共享運動', icon: <Share2 size={ICON_SIZE} color={Colors.accent} />, route: '/admin/shared-exercises', countKey: 'shared_exercises' },
   { key: 'assessments', titleEn: 'Assessments', titleZh: '評估庫', icon: <ClipboardCheck size={ICON_SIZE} color="#2EAADC" />, route: '/admin/assessments' },
 ];
