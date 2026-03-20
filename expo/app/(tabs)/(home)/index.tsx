@@ -101,6 +101,15 @@ export default function DashboardScreen() {
     enabled: isAdmin,
   });
 
+  const testQuery = useQuery({
+    queryKey: ['test-connection'],
+    queryFn: async () => {
+      const { data, error, count } = await supabase.from('patients').select('*', { count: 'exact' });
+      console.log('TEST QUERY - count:', count, 'data length:', data?.length, 'error:', error, 'first row:', data?.[0]);
+      return { count: count || 0, dataLen: data?.length || 0, hasError: !!error, firstPatient: data?.[0]?.patient_name || data?.[0]?.name || 'none' };
+    },
+  });
+
   const notificationsQuery = useQuery({
     queryKey: ['dashboard-notifications', role, clinician?.id, adminUser?.id],
     queryFn: async () => {
@@ -143,6 +152,9 @@ export default function DashboardScreen() {
         <View>
           <Text style={styles.greeting}>{greeting}</Text>
           <Text style={styles.userName}>{userName}</Text>
+          <Text style={{ fontSize: 10, color: 'red', padding: 4 }}>
+            DB: count={testQuery.data?.count} len={testQuery.data?.dataLen} err={String(testQuery.data?.hasError)} first={testQuery.data?.firstPatient}
+          </Text>
         </View>
         <View style={styles.roleBadge}>
           <Text style={styles.roleBadgeText}>
