@@ -31,13 +31,12 @@ import { supabase } from '@/lib/supabase';
 
 interface Organisation {
   id: string;
-  name?: string;
   name_en?: string;
   name_zh?: string;
-  contact_person?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
+  logo_url?: string;
+  website_url?: string;
+  type?: string;
+  sort_order?: number;
   is_active?: boolean;
   created_at?: string;
 }
@@ -51,15 +50,15 @@ export default function OrganisationsScreen() {
   const [editingOrg, setEditingOrg] = useState<Organisation | null>(null);
   const [tableExists, setTableExists] = useState(true);
 
-  const [name, setName] = useState('');
+  const [nameEn, setNameEn] = useState('');
   const [nameZh, setNameZh] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [orgType, setOrgType] = useState('');
+  const [sortOrder, setSortOrder] = useState('');
   const [isActive, setIsActive] = useState(true);
 
-  const [resolvedTable, setResolvedTable] = useState<string | null>(null);
+  const [resolvedTable, setResolvedTable] = useState<string | null>('organisations');
 
   const orgsQuery = useQuery({
     queryKey: ['admin-organisations'],
@@ -94,58 +93,51 @@ export default function OrganisationsScreen() {
     enabled: isAdmin,
   });
 
-  const getOrgName = useCallback((org: Organisation): string => {
-    return org.name || org.name_en || '';
-  }, []);
-
   const filtered = useMemo(() => {
     if (!orgsQuery.data) return [];
     if (!search.trim()) return orgsQuery.data;
     const s = search.toLowerCase();
     return orgsQuery.data.filter(o =>
-      getOrgName(o)?.toLowerCase().includes(s) ||
-      o.name_zh?.toLowerCase().includes(s) ||
-      o.contact_person?.toLowerCase().includes(s) ||
-      o.email?.toLowerCase().includes(s)
+      o.name_en?.toLowerCase().includes(s) ||
+      o.name_zh?.toLowerCase().includes(s)
     );
-  }, [orgsQuery.data, search, getOrgName]);
+  }, [orgsQuery.data, search]);
 
   const openNew = useCallback(() => {
     setEditingOrg(null);
-    setName('');
+    setNameEn('');
     setNameZh('');
-    setContactPerson('');
-    setEmail('');
-    setPhone('');
-    setAddress('');
+    setLogoUrl('');
+    setWebsiteUrl('');
+    setOrgType('');
+    setSortOrder('');
     setIsActive(true);
     setModalVisible(true);
   }, []);
 
   const openEdit = useCallback((org: Organisation) => {
     setEditingOrg(org);
-    setName(org.name || org.name_en || '');
+    setNameEn(org.name_en || '');
     setNameZh(org.name_zh || '');
-    setContactPerson(org.contact_person || '');
-    setEmail(org.email || '');
-    setPhone(org.phone || '');
-    setAddress(org.address || '');
+    setLogoUrl(org.logo_url || '');
+    setWebsiteUrl(org.website_url || '');
+    setOrgType(org.type || '');
+    setSortOrder(String(org.sort_order ?? ''));
     setIsActive(org.is_active !== false);
     setModalVisible(true);
   }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!name.trim()) throw new Error('Name is required');
+      if (!nameEn.trim()) throw new Error('Name is required');
       const table = resolvedTable || 'organisations';
       const payload: Record<string, unknown> = {
-        name: name.trim(),
-        name_en: name.trim(),
+        name_en: nameEn.trim(),
         name_zh: nameZh.trim() || null,
-        contact_person: contactPerson.trim() || null,
-        email: email.trim() || null,
-        phone: phone.trim() || null,
-        address: address.trim() || null,
+        logo_url: logoUrl.trim() || null,
+        website_url: websiteUrl.trim() || null,
+        type: orgType.trim() || null,
+        sort_order: sortOrder ? parseInt(sortOrder, 10) : null,
         is_active: isActive,
       };
       if (editingOrg) {
@@ -245,9 +237,9 @@ export default function OrganisationsScreen() {
             <TouchableOpacity key={org.id} style={styles.card} onPress={() => openEdit(org)} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName}>{org.name || org.name_en}{org.name_zh ? ` ${org.name_zh}` : ''}</Text>
-                  {org.contact_person && <Text style={styles.cardSub}>{org.contact_person}</Text>}
-                  {org.email && <Text style={styles.cardSub}>{org.email}</Text>}
+                  <Text style={styles.cardName}>{org.name_en}{org.name_zh ? ` ${org.name_zh}` : ''}</Text>
+                  {org.type && <Text style={styles.cardSub}>{org.type}</Text>}
+                  {org.website_url && <Text style={styles.cardSub}>{org.website_url}</Text>}
                 </View>
                 <View style={[styles.activeBadge, { backgroundColor: org.is_active !== false ? Colors.successLight : Colors.dangerLight }]}>
                   <Text style={[styles.activeBadgeText, { color: org.is_active !== false ? Colors.success : Colors.danger }]}>
@@ -282,23 +274,23 @@ export default function OrganisationsScreen() {
             </View>
 
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-              <Text style={styles.fieldLabel}>Name 名稱</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Organisation name" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Name (English) 名稱</Text>
+              <TextInput style={styles.input} value={nameEn} onChangeText={setNameEn} placeholder="Organisation name" placeholderTextColor={Colors.textTertiary} />
 
               <Text style={styles.fieldLabel}>Name (Chinese) 中文名稱</Text>
               <TextInput style={styles.input} value={nameZh} onChangeText={setNameZh} placeholder="機構名稱" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Contact Person 聯絡人</Text>
-              <TextInput style={styles.input} value={contactPerson} onChangeText={setContactPerson} placeholder="Contact name" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Logo URL 標誌網址</Text>
+              <TextInput style={styles.input} value={logoUrl} onChangeText={setLogoUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Email 電郵</Text>
-              <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Website URL 網站網址</Text>
+              <TextInput style={styles.input} value={websiteUrl} onChangeText={setWebsiteUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Phone 電話</Text>
-              <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone number" keyboardType="phone-pad" placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Type 類型</Text>
+              <TextInput style={styles.input} value={orgType} onChangeText={setOrgType} placeholder="e.g. Hospital, Clinic, NGO" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Address 地址</Text>
-              <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} value={address} onChangeText={setAddress} placeholder="Address" multiline placeholderTextColor={Colors.textTertiary} />
+              <Text style={styles.fieldLabel}>Sort Order 排序</Text>
+              <TextInput style={styles.input} value={sortOrder} onChangeText={setSortOrder} placeholder="0" keyboardType="number-pad" placeholderTextColor={Colors.textTertiary} />
 
               <View style={styles.toggleRow}>
                 <Text style={styles.fieldLabel}>Active 啟用</Text>
