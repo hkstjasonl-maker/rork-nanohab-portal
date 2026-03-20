@@ -581,15 +581,15 @@ function ProgramFormModal({
       const items: ProgramExerciseItem[] = existingExercisesQuery.data.map((pe) => ({
         id: pe.id,
         exercise_id: pe.exercise_library_id,
-        title: pe.exercise_library?.title_en || 'Unknown',
-        title_zh: pe.exercise_library?.title_zh_hant,
-        duration_seconds: pe.exercise_library?.default_duration_minutes ? pe.exercise_library.default_duration_minutes * 60 : undefined,
+        title: pe.exercise_library?.title_en || pe.title_en || 'Unknown',
+        title_zh: pe.exercise_library?.title_zh_hant || pe.title_zh_hant,
+        duration_minutes: pe.exercise_library?.default_duration_minutes || pe.duration_minutes,
         sort_order: pe.sort_order,
         dosage: pe.dosage || '',
-        dosage_sets: String(pe.dosage_sets ?? ''),
-        dosage_reps: String(pe.dosage_reps ?? ''),
-        dosage_duration: String(pe.dosage_duration_seconds ?? ''),
-        notes: pe.notes || '',
+        dosage_zh_hant: pe.dosage_zh_hant || '',
+        dosage_per_day: String(pe.dosage_per_day ?? ''),
+        dosage_days_per_week: String(pe.dosage_days_per_week ?? ''),
+        modifications: pe.modifications || '',
       }));
       setProgramExercises(items);
       setExercisesLoaded(true);
@@ -620,13 +620,13 @@ function ProgramFormModal({
           exercise_id: exercise.id,
           title: exercise.title_en,
           title_zh: exercise.title_zh_hant,
-          duration_seconds: exercise.default_duration_minutes ? exercise.default_duration_minutes * 60 : undefined,
+          duration_minutes: exercise.default_duration_minutes,
           sort_order: prev.length,
           dosage: '',
-          dosage_sets: '',
-          dosage_reps: '',
-          dosage_duration: '',
-          notes: '',
+          dosage_zh_hant: '',
+          dosage_per_day: '',
+          dosage_days_per_week: '',
+          modifications: '',
         },
       ];
     });
@@ -703,12 +703,16 @@ function ProgramFormModal({
         const exerciseRows = programExercises.map((pe, idx) => ({
           program_id: programId,
           exercise_library_id: pe.exercise_id,
+          title_en: pe.title || null,
+          title_zh_hant: pe.title_zh || null,
+          duration_minutes: pe.duration_minutes || null,
           sort_order: idx,
           dosage: pe.dosage.trim() || null,
-          dosage_sets: pe.dosage_sets ? parseInt(pe.dosage_sets, 10) : null,
-          dosage_reps: pe.dosage_reps ? parseInt(pe.dosage_reps, 10) : null,
-          dosage_duration_seconds: pe.dosage_duration ? parseInt(pe.dosage_duration, 10) : null,
-          notes: pe.notes.trim() || null,
+          dosage_zh_hant: pe.dosage_zh_hant.trim() || null,
+          dosage_per_day: pe.dosage_per_day ? parseInt(pe.dosage_per_day, 10) : null,
+          dosage_days_per_week: pe.dosage_days_per_week ? parseInt(pe.dosage_days_per_week, 10) : null,
+          modifications: pe.modifications.trim() || null,
+          category: null,
         }));
 
         const { error: exInsertError } = await supabase
@@ -914,13 +918,13 @@ interface ProgramExerciseItem {
   exercise_id: string;
   title: string;
   title_zh?: string;
-  duration_seconds?: number;
+  duration_minutes?: number;
   sort_order: number;
   dosage: string;
-  dosage_sets: string;
-  dosage_reps: string;
-  dosage_duration: string;
-  notes: string;
+  dosage_zh_hant: string;
+  dosage_per_day: string;
+  dosage_days_per_week: string;
+  modifications: string;
 }
 
 const ProgramExerciseRow = React.memo(function ProgramExerciseRow({
@@ -964,9 +968,9 @@ const ProgramExerciseRow = React.memo(function ProgramExerciseRow({
             {index + 1}. {item.title}
             {item.title_zh ? ` ${item.title_zh}` : ''}
           </Text>
-          {item.duration_seconds && (
+          {item.duration_minutes && (
             <Text style={styles.peDuration}>
-              {Math.ceil(item.duration_seconds / 60)} min
+              {item.duration_minutes} min
             </Text>
           )}
         </View>
@@ -976,34 +980,33 @@ const ProgramExerciseRow = React.memo(function ProgramExerciseRow({
       </View>
 
       <View style={styles.peDosageRow}>
-        <View style={styles.peDosageField}>
-          <Text style={styles.peDosageLabel}>Sets 組</Text>
+        <View style={[styles.peDosageField, { flex: 2 }]}>
+          <Text style={styles.peDosageLabel}>Dosage 劑量</Text>
           <TextInput
             style={styles.peDosageInput}
-            value={item.dosage_sets}
-            onChangeText={(v) => onUpdateField('dosage_sets', v)}
+            value={item.dosage}
+            onChangeText={(v) => onUpdateField('dosage', v)}
+            placeholder="—"
+            placeholderTextColor={Colors.textTertiary}
+          />
+        </View>
+        <View style={styles.peDosageField}>
+          <Text style={styles.peDosageLabel}>Per Day 每日</Text>
+          <TextInput
+            style={styles.peDosageInput}
+            value={item.dosage_per_day}
+            onChangeText={(v) => onUpdateField('dosage_per_day', v)}
             placeholder="—"
             placeholderTextColor={Colors.textTertiary}
             keyboardType="number-pad"
           />
         </View>
         <View style={styles.peDosageField}>
-          <Text style={styles.peDosageLabel}>Reps 次</Text>
+          <Text style={styles.peDosageLabel}>Days/Wk 週</Text>
           <TextInput
             style={styles.peDosageInput}
-            value={item.dosage_reps}
-            onChangeText={(v) => onUpdateField('dosage_reps', v)}
-            placeholder="—"
-            placeholderTextColor={Colors.textTertiary}
-            keyboardType="number-pad"
-          />
-        </View>
-        <View style={styles.peDosageField}>
-          <Text style={styles.peDosageLabel}>Sec 秒</Text>
-          <TextInput
-            style={styles.peDosageInput}
-            value={item.dosage_duration}
-            onChangeText={(v) => onUpdateField('dosage_duration', v)}
+            value={item.dosage_days_per_week}
+            onChangeText={(v) => onUpdateField('dosage_days_per_week', v)}
             placeholder="—"
             placeholderTextColor={Colors.textTertiary}
             keyboardType="number-pad"
@@ -1013,9 +1016,9 @@ const ProgramExerciseRow = React.memo(function ProgramExerciseRow({
 
       <TextInput
         style={styles.peNotesInput}
-        value={item.notes}
-        onChangeText={(v) => onUpdateField('notes', v)}
-        placeholder="Notes 備註..."
+        value={item.modifications}
+        onChangeText={(v) => onUpdateField('modifications', v)}
+        placeholder="Modifications 調整..."
         placeholderTextColor={Colors.textTertiary}
         multiline
         numberOfLines={1}
@@ -1059,18 +1062,18 @@ function ExercisePickerModal({
       const [sharedRes, ownRes] = await Promise.all([
         supabase
           .from('shared_exercises')
-          .select('exercise_id, exercise_library(*)')
+          .select('exercise_library_id, exercise_library(*)')
           .eq('clinician_id', clinicianId),
         supabase
           .from('exercise_library')
           .select('*')
           .eq('created_by_clinician_id', clinicianId)
           .eq('is_active', true)
-          .order('title', { ascending: true }),
+          .order('title_en', { ascending: true }),
       ]);
 
       const shared: Exercise[] = (sharedRes.data || [])
-        .map((se: { exercise_id: string; exercise_library: unknown }) => se.exercise_library as Exercise | null)
+        .map((se: { exercise_library_id: string; exercise_library: unknown }) => se.exercise_library as Exercise | null)
         .filter(Boolean) as Exercise[];
 
       const own: Exercise[] = (ownRes.data || []) as Exercise[];

@@ -125,11 +125,7 @@ export default function DashboardScreen() {
           .order('created_at', { ascending: false })
           .limit(5);
 
-        if (!isAdmin && clinician?.id) {
-          query = query.eq('clinician_id', clinician.id);
-        }
-
-        const { data, error } = await query;
+          const { data, error } = await query;
         if (error) {
           console.log('Dashboard notifications error:', error);
           return [];
@@ -294,10 +290,10 @@ function NotificationItem({ notification }: { notification: Notification }) {
 
   return (
     <TouchableOpacity style={styles.notificationItem} activeOpacity={0.6}>
-      <View style={[styles.notificationDot, notification.is_read && styles.notificationDotRead]} />
+      <View style={styles.notificationDot} />
       <View style={styles.notificationContent}>
-        <Text style={styles.notificationTitle} numberOfLines={1}>{notification.title}</Text>
-        <Text style={styles.notificationBody} numberOfLines={2}>{notification.body}</Text>
+        <Text style={styles.notificationTitle} numberOfLines={1}>{notification.title_en}</Text>
+        <Text style={styles.notificationBody} numberOfLines={2}>{notification.body_en}</Text>
         <Text style={styles.notificationTime}>{timeAgo}</Text>
       </View>
       <ChevronRight size={16} color={Colors.textTertiary} />

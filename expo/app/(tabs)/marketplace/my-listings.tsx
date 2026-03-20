@@ -101,8 +101,8 @@ export default function MyListingsScreen() {
   const stats = useMemo(() => {
     if (!listingsQuery.data) return { total: 0, approved: 0, totalEarned: 0 };
     const approved = listingsQuery.data.filter((l) => l.approval_status === 'approved').length;
-    const totalEarned = listingsQuery.data.reduce((sum, l) => sum + (l.total_earned || 0), 0);
-    return { total: listingsQuery.data.length, approved, totalEarned };
+    const totalRentals = listingsQuery.data.reduce((sum, l) => sum + (l.total_rentals || 0), 0);
+    return { total: listingsQuery.data.length, approved, totalRentals };
   }, [listingsQuery.data]);
 
   const totalActiveRentals = useMemo(() => {
@@ -147,8 +147,8 @@ export default function MyListingsScreen() {
         </View>
         <View style={styles.statCard}>
           <DollarSign size={16} color="#F5A623" />
-          <Text style={styles.statValue}>${stats.totalEarned.toFixed(0)}</Text>
-          <Text style={styles.statLabel}>Earned</Text>
+          <Text style={styles.statValue}>{stats.totalRentals}</Text>
+          <Text style={styles.statLabel}>Rentals</Text>
         </View>
       </View>
 
@@ -216,11 +216,11 @@ const MyListingCard = React.memo(function MyListingCard({
   listing: MarketplaceListing;
   activeRentals: number;
 }) {
-  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
+  const title = listing.display_name || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.exercise_library?.title_zh_hant;
   const approvalInfo = getApprovalInfo(listing.approval_status);
-  const rate = listing.hkd_per_day ?? 0;
-  const earned = listing.total_earned ?? 0;
+  const rate = listing.daily_rate_hkd ?? 0;
+  const totalRentals = listing.total_rentals ?? 0;
 
   return (
     <View style={styles.listingCard} testID={`my-listing-${listing.id}`}>
@@ -251,7 +251,7 @@ const MyListingCard = React.memo(function MyListingCard({
 
       <View style={styles.cardFooter}>
         <View style={styles.earnedBadge}>
-          <Text style={styles.earnedText}>Earned: HKD ${earned.toFixed(0)}</Text>
+          <Text style={styles.earnedText}>Total Rentals: {totalRentals}</Text>
         </View>
         {!listing.is_active && (
           <View style={styles.inactiveBadge}>
@@ -313,14 +313,12 @@ function NewListingModal({
       const { error } = await supabase.from('marketplace_listings').insert({
         exercise_library_id: selectedExercise.id,
         clinician_id: clinicianId,
-        title: title.trim() || selectedExercise.title_en,
-        title_zh: titleZh.trim() || selectedExercise.title_zh_hant || null,
-        description: description.trim() || null,
-        description_zh: descriptionZh.trim() || null,
-        contraindications: contraindications.trim() || null,
+        display_name: title.trim() || selectedExercise.title_en,
+        introduction: description.trim() || null,
+        contraindications_patients: contraindications.trim() || null,
         category: selectedExercise.category || null,
         tags: tagArray.length > 0 ? tagArray : null,
-        hkd_per_day: parseFloat(hkdPerDay) || 0,
+        daily_rate_hkd: parseFloat(hkdPerDay) || 0,
         approval_status: 'pending',
         is_active: true,
         listing_start_date: new Date().toISOString().split('T')[0],

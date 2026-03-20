@@ -63,7 +63,7 @@ export default function RentalLogbookScreen() {
       console.log('Fetching my rentals for:', clinician.id);
       const { data, error } = await supabase
         .from('marketplace_rentals')
-        .select('*, marketplace_listings(*, exercise_library(title, title_zh, category), clinicians(name, name_zh))')
+        .select('*, marketplace_listings(*, exercise_library(title_en, title_zh_hant, category), clinicians(full_name, full_name_zh))')
         .eq('renting_clinician_id', clinician.id)
         .order('created_at', { ascending: false });
 
@@ -96,7 +96,7 @@ export default function RentalLogbookScreen() {
 
       const { data, error } = await supabase
         .from('marketplace_rentals')
-        .select('*, marketplace_listings(*, exercise_library(title, title_zh, category))')
+        .select('*, marketplace_listings(*, exercise_library(title_en, title_zh_hant, category))')
         .in('listing_id', listingIds)
         .order('created_at', { ascending: false });
 
@@ -223,12 +223,12 @@ const RentalCard = React.memo(function RentalCard({
   const [showReviewModal, setShowReviewModal] = useState(false);
 
   const listing = rental.marketplace_listings;
-  const title = listing?.title || listing?.exercise_library?.title || 'Untitled';
-  const titleZh = listing?.title_zh || listing?.exercise_library?.title_zh;
+  const title = listing?.display_name || listing?.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing?.exercise_library?.title_zh_hant;
   const category = listing?.category || listing?.exercise_library?.category;
   const statusInfo = getStatusInfo(rental.status);
   const fee = rental.total_fee ?? 0;
-  const rate = rental.hkd_per_day ?? 0;
+  const rate = rental.hkd_per_day ?? rental.total_fee ? Math.round((rental.total_fee || 0) / Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / 86400000))) : 0;
   const startDate = rental.start_date ? new Date(rental.start_date).toLocaleDateString() : '-';
   const endDate = rental.end_date ? new Date(rental.end_date).toLocaleDateString() : '-';
   const isExpired = rental.end_date ? new Date(rental.end_date) < new Date() : false;

@@ -36,13 +36,15 @@ interface MediaRequest {
   exercise_library_id: string;
   clinician_id: string;
   video_url?: string;
-  video_required: boolean;
-  audio_optional: boolean;
-  subtitle_optional: boolean;
-  live_subtitles_optional: boolean;
+  request_video: boolean;
+  request_audio: boolean;
+  request_subtitle: boolean;
+  request_live_subtitles: boolean;
+  declaration_accepted?: boolean;
   notes?: string;
   status: string;
   rejection_reason?: string;
+  reviewed_at?: string;
   created_at: string;
   exercise_library?: { title_en: string; title_zh_hant?: string };
   clinicians?: { full_name: string; full_name_zh?: string };
@@ -99,7 +101,7 @@ export default function MediaRequestsScreen() {
     mutationFn: async ({ id, exerciseId }: { id: string; exerciseId: string }) => {
       const { error: reqError } = await supabase
         .from('exercise_media_requests')
-        .update({ status: 'approved' })
+        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
         .eq('id', id);
       if (reqError) throw reqError;
       const { error: exError } = await supabase
@@ -122,7 +124,7 @@ export default function MediaRequestsScreen() {
       if (!rejectingId || !rejectingExerciseId) throw new Error('Invalid state');
       const { error: reqError } = await supabase
         .from('exercise_media_requests')
-        .update({ status: 'rejected', rejection_reason: rejectionReason })
+        .update({ status: 'rejected', rejection_reason: rejectionReason, reviewed_at: new Date().toISOString() })
         .eq('id', rejectingId);
       if (reqError) throw reqError;
       const { error: exError } = await supabase
@@ -223,25 +225,25 @@ export default function MediaRequestsScreen() {
                 </View>
 
                 <View style={styles.mediaTags}>
-                  {r.video_required && (
+                  {r.request_video && (
                     <View style={styles.mediaTag}>
                       <Video size={12} color={Colors.info} />
                       <Text style={styles.mediaTagText}>Video</Text>
                     </View>
                   )}
-                  {r.audio_optional && (
+                  {r.request_audio && (
                     <View style={styles.mediaTag}>
                       <Headphones size={12} color={Colors.accent} />
                       <Text style={styles.mediaTagText}>Audio</Text>
                     </View>
                   )}
-                  {r.subtitle_optional && (
+                  {r.request_subtitle && (
                     <View style={styles.mediaTag}>
                       <Subtitles size={12} color={Colors.success} />
                       <Text style={styles.mediaTagText}>Subtitles</Text>
                     </View>
                   )}
-                  {r.live_subtitles_optional && (
+                  {r.request_live_subtitles && (
                     <View style={styles.mediaTag}>
                       <Subtitles size={12} color={Colors.warning} />
                       <Text style={styles.mediaTagText}>Live Subs</Text>

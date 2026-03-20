@@ -21,7 +21,6 @@ import {
   X,
   ChevronLeft,
   Shield,
-  Star,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -32,7 +31,8 @@ interface FeedbackItem {
   message: string;
   category?: string;
   subject?: string;
-  rating?: number;
+  device_info?: string;
+  app_version?: string;
   status: string;
   admin_notes?: string;
   patient_id?: string;
@@ -50,25 +50,6 @@ function getStatusColor(status: string) {
     default: return Colors.warning;
   }
 }
-
-function RatingStars({ rating }: { rating: number }) {
-  return (
-    <View style={ratingStyles.container}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <Star
-          key={i}
-          size={14}
-          color={i <= rating ? '#F5A623' : Colors.border}
-          fill={i <= rating ? '#F5A623' : 'transparent'}
-        />
-      ))}
-    </View>
-  );
-}
-
-const ratingStyles = StyleSheet.create({
-  container: { flexDirection: 'row', gap: 2 },
-});
 
 export default function UserFeedbackScreen() {
   const { isAdmin } = useAuth();
@@ -221,7 +202,7 @@ export default function UserFeedbackScreen() {
                   </View>
                 </View>
                 <View style={styles.cardBottom}>
-                  {f.rating != null && <RatingStars rating={f.rating} />}
+                  {f.category && <View style={[styles.statusBadge, { backgroundColor: Colors.infoLight }]}><Text style={[styles.statusBadgeText, { color: Colors.info }]}>{f.category}</Text></View>}
                   <Text style={styles.cardDate}>{new Date(f.created_at).toLocaleDateString()}</Text>
                 </View>
               </TouchableOpacity>
@@ -255,10 +236,17 @@ export default function UserFeedbackScreen() {
                     {selectedFeedback.patients?.patient_name || 'Unknown'}
                   </Text>
 
-                  {selectedFeedback.rating != null && (
+                  {selectedFeedback.category && (
                     <>
-                      <Text style={styles.fieldLabel}>Rating 評分</Text>
-                      <RatingStars rating={selectedFeedback.rating} />
+                      <Text style={styles.fieldLabel}>Category 類別</Text>
+                      <Text style={styles.detailText}>{selectedFeedback.category}</Text>
+                    </>
+                  )}
+
+                  {selectedFeedback.subject && (
+                    <>
+                      <Text style={styles.fieldLabel}>Subject 主題</Text>
+                      <Text style={styles.detailText}>{selectedFeedback.subject}</Text>
                     </>
                   )}
 

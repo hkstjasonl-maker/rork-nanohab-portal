@@ -88,8 +88,8 @@ export default function ExerciseDetailScreen() {
       setTitle(e.title_en || '');
       setTitleZh(e.title_zh_hant || '');
       setCategory(e.category || '');
-      setDescription(e.description_en || '');
-      setDescriptionZh(e.description_zh_hant || '');
+      setDescription('');
+      setDescriptionZh('');
       setDurationSeconds(e.default_duration_minutes ? String(e.default_duration_minutes) : '');
       setVimeoUrl(e.vimeo_video_id || '');
       setYoutubeUrl(e.youtube_video_id || '');
@@ -110,8 +110,7 @@ export default function ExerciseDetailScreen() {
           title_en: title.trim(),
           title_zh_hant: titleZh.trim() || null,
           category: category.trim() || null,
-          description_en: description.trim() || null,
-          description_zh_hant: descriptionZh.trim() || null,
+
           default_duration_minutes: durationSeconds ? parseInt(durationSeconds, 10) : null,
           vimeo_video_id: vimeoUrl.trim() || null,
           youtube_video_id: youtubeUrl.trim() || null,

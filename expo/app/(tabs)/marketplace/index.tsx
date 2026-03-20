@@ -111,8 +111,7 @@ export default function BrowseMarketplaceScreen() {
       const lower = searchText.toLowerCase();
       result = result.filter(
         (l) =>
-          l.title?.toLowerCase().includes(lower) ||
-          l.title_zh?.toLowerCase().includes(lower) ||
+          l.display_name?.toLowerCase().includes(lower) ||
           l.exercise_library?.title_en?.toLowerCase().includes(lower) ||
           l.exercise_library?.title_zh_hant?.toLowerCase().includes(lower) ||
           l.tags?.some((t) => t.toLowerCase().includes(lower))
@@ -121,10 +120,10 @@ export default function BrowseMarketplaceScreen() {
 
     switch (sortBy) {
       case 'price_low':
-        result.sort((a, b) => (a.hkd_per_day || 0) - (b.hkd_per_day || 0));
+        result.sort((a, b) => (a.daily_rate_hkd || 0) - (b.daily_rate_hkd || 0));
         break;
       case 'price_high':
-        result.sort((a, b) => (b.hkd_per_day || 0) - (a.hkd_per_day || 0));
+        result.sort((a, b) => (b.daily_rate_hkd || 0) - (a.daily_rate_hkd || 0));
         break;
       case 'rating':
         result.sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0));
@@ -145,7 +144,7 @@ export default function BrowseMarketplaceScreen() {
 
       const startDate = new Date().toISOString().split('T')[0];
       const endDate = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
-      const rate = listing.hkd_per_day || 0;
+      const rate = listing.daily_rate_hkd || 0;
 
       let discountPct = 0;
       if (listing.discount_tiers && listing.discount_tiers.length > 0) {
@@ -354,12 +353,12 @@ const ListingCard = React.memo(function ListingCard({
   listing: MarketplaceListing;
   onPress: () => void;
 }) {
-  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
+  const title = listing.display_name || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.exercise_library?.title_zh_hant;
   const thumbnail = listing.screenshots?.[0];
-  const rate = listing.hkd_per_day ?? 0;
+  const rate = listing.daily_rate_hkd ?? 0;
   const rating = listing.avg_rating ?? 0;
-  const ratingCount = listing.rating_count ?? 0;
+  const ratingCount = listing.review_count ?? 0;
 
   return (
     <TouchableOpacity style={styles.listingCard} onPress={onPress} activeOpacity={0.7} testID={`listing-${listing.id}`}>
@@ -429,14 +428,14 @@ function ListingDetailModal({
   const [rentalDays, setRentalDays] = useState('7');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const screenshots = listing.screenshots || [];
-  const title = listing.title || listing.exercise_library?.title_en || 'Untitled';
-  const titleZh = listing.title_zh || listing.exercise_library?.title_zh_hant;
-  const desc = listing.description || listing.exercise_library?.description_en || '';
-  const descZh = listing.description_zh || listing.exercise_library?.description_zh_hant;
-  const contra = listing.contraindications || listing.contraindications_zh || '';
-  const rate = listing.hkd_per_day ?? 0;
+  const title = listing.display_name || listing.exercise_library?.title_en || 'Untitled';
+  const titleZh = listing.exercise_library?.title_zh_hant;
+  const desc = listing.introduction || '';
+  const descZh = '';
+  const contra = listing.contraindications_patients || listing.contraindications_clinicians || '';
+  const rate = listing.daily_rate_hkd ?? 0;
   const rating = listing.avg_rating ?? 0;
-  const ratingCount = listing.rating_count ?? 0;
+  const ratingCount = listing.review_count ?? 0;
   const ownerName = listing.clinicians?.full_name || 'Unknown';
   const ownerClinic = listing.clinicians?.organization;
   const isOwn = listing.clinician_id === clinicianId;

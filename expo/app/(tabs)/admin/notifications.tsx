@@ -34,10 +34,15 @@ import { supabase } from '@/lib/supabase';
 
 interface NotificationItem {
   id: string;
-  title: string;
-  body: string;
+  title_en: string;
+  title_zh?: string;
+  body_en: string;
+  body_zh?: string;
   type: string;
-  clinician_id?: string | null;
+  target_type?: string;
+  start_date?: string;
+  end_date?: string;
+  is_active?: boolean;
   created_at: string;
 }
 
@@ -97,7 +102,7 @@ export default function NotificationsManagementScreen() {
     if (!search.trim()) return notificationsQuery.data;
     const s = search.toLowerCase();
     return notificationsQuery.data.filter(n =>
-      n.title?.toLowerCase().includes(s) || n.body?.toLowerCase().includes(s)
+      n.title_en?.toLowerCase().includes(s) || n.body_en?.toLowerCase().includes(s) || n.title_zh?.toLowerCase().includes(s)
     );
   }, [notificationsQuery.data, search]);
 
@@ -112,10 +117,10 @@ export default function NotificationsManagementScreen() {
 
   const openEdit = useCallback((n: NotificationItem) => {
     setEditingId(n.id);
-    setTitle(n.title || '');
-    setBody(n.body || '');
+    setTitle(n.title_en || '');
+    setBody(n.body_en || '');
     setType(n.type || 'info');
-    setClinicianId(n.clinician_id || '');
+    setClinicianId('');
     setModalVisible(true);
   }, []);
 
@@ -123,10 +128,10 @@ export default function NotificationsManagementScreen() {
     mutationFn: async () => {
       if (!title.trim()) throw new Error('Title is required');
       const payload = {
-        title: title.trim(),
-        body: body.trim(),
+        title_en: title.trim(),
+        body_en: body.trim(),
         type,
-        clinician_id: clinicianId.trim() || null,
+        is_active: true,
       };
       if (editingId) {
         const { error } = await supabase.from('notifications').update(payload).eq('id', editingId);
@@ -224,8 +229,8 @@ export default function NotificationsManagementScreen() {
                   {getTypeIcon(n.type, 20)}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{n.title}</Text>
-                  <Text style={styles.cardBody} numberOfLines={2}>{n.body}</Text>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{n.title_en}</Text>
+                  <Text style={styles.cardBody} numberOfLines={2}>{n.body_en}</Text>
                   <Text style={styles.cardDate}>{new Date(n.created_at).toLocaleDateString()}</Text>
                 </View>
                 <View style={styles.cardActions}>
@@ -290,12 +295,12 @@ export default function NotificationsManagementScreen() {
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Clinician ID (optional) 治療師ID</Text>
+              <Text style={styles.fieldLabel}>Target Type 目標類型</Text>
               <TextInput
                 style={styles.input}
                 value={clinicianId}
                 onChangeText={setClinicianId}
-                placeholder="Leave empty for all"
+                placeholder="all / clinician / patient"
                 placeholderTextColor={Colors.textTertiary}
               />
             </ScrollView>

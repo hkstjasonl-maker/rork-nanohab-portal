@@ -74,13 +74,19 @@ export interface Patient {
 
 export interface Notification {
   id: string;
-  title: string;
-  body: string;
+  title_en: string;
+  title_zh?: string;
+  body_en: string;
+  body_zh?: string;
   type: string;
-  is_read: boolean;
+  image_url?: string;
+  video_url?: string;
+  link_url?: string;
+  target_type?: string;
+  start_date?: string;
+  end_date?: string;
+  is_active?: boolean;
   created_at: string;
-  user_id?: string;
-  clinician_id?: string;
 }
 
 export type MediaStatus = 'active' | 'pending_review' | 'rejected';
@@ -120,12 +126,15 @@ export interface ExerciseMediaRequest {
   exercise_library_id: string;
   clinician_id: string;
   video_url?: string;
-  video_required: boolean;
-  audio_optional: boolean;
-  subtitle_optional: boolean;
-  live_subtitles_optional: boolean;
+  request_video: boolean;
+  request_audio: boolean;
+  request_subtitle: boolean;
+  request_live_subtitles: boolean;
+  declaration_accepted?: boolean;
   notes?: string;
   status?: string;
+  rejection_reason?: string;
+  reviewed_at?: string;
   created_at?: string;
 }
 
@@ -152,11 +161,17 @@ export interface ProgramExercise {
   program_id: string;
   exercise_library_id: string;
   sort_order: number;
+  title_en?: string;
+  title_zh_hant?: string;
+  youtube_video_id?: string;
+  vimeo_video_id?: string;
+  duration_minutes?: number;
   dosage?: string;
-  dosage_sets?: number;
-  dosage_reps?: number;
-  dosage_duration_seconds?: number;
-  notes?: string;
+  dosage_zh_hant?: string;
+  dosage_per_day?: number;
+  dosage_days_per_week?: number;
+  category?: string;
+  modifications?: string;
   created_at?: string;
   exercise_library?: Exercise;
 }
@@ -173,24 +188,22 @@ export interface MarketplaceListing {
   id: string;
   exercise_library_id: string;
   clinician_id: string;
-  title?: string;
-  title_zh?: string;
-  description?: string;
-  description_zh?: string;
-  contraindications?: string;
-  contraindications_zh?: string;
+  display_name?: string;
+  introduction?: string;
+  contraindications_patients?: string;
+  contraindications_clinicians?: string;
   category?: string;
   tags?: string[];
   screenshots?: string[];
-  hkd_per_day?: number;
+  daily_rate_hkd?: number;
   discount_tiers?: { min_days: number; discount_pct: number }[];
   approval_status: 'pending' | 'approved' | 'rejected';
   is_active: boolean;
   listing_start_date?: string;
   listing_end_date?: string;
-  total_earned?: number;
+  total_rentals?: number;
   avg_rating?: number;
-  rating_count?: number;
+  review_count?: number;
   created_at?: string;
   updated_at?: string;
   exercise_library?: Exercise;

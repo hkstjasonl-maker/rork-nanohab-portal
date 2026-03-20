@@ -28,7 +28,7 @@ export default function PatientDetailScreen() {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
-  const [nameZh, setNameZh] = useState('');
+  const [_nameZh, setNameZh] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [diagnosisZh, setDiagnosisZh] = useState('');
   const [gender, setGender] = useState('');
@@ -50,7 +50,7 @@ export default function PatientDetailScreen() {
       if (error) throw error;
       const p = data as Patient;
       setName(p.patient_name || '');
-      setNameZh(p.patient_name_zh || '');
+      setNameZh('');
       setDiagnosis(p.diagnosis || '');
       setDiagnosisZh(p.diagnosis_zh || '');
       setGender(p.gender || '');
@@ -70,7 +70,7 @@ export default function PatientDetailScreen() {
         .from('patients')
         .update({
           patient_name: name.trim(),
-          patient_name_zh: nameZh.trim() || null,
+
           diagnosis: diagnosis.trim() || null,
           diagnosis_zh: diagnosisZh.trim() || null,
           gender: gender.trim() || null,
@@ -219,7 +219,7 @@ export default function PatientDetailScreen() {
         <View style={styles.formSection}>
           <Text style={styles.formSectionTitle}>Basic Info 基本資料</Text>
           <EditField label="Name 姓名 *" value={name} onChangeText={handleFieldChange(setName)} placeholder="Patient name" />
-          <EditField label="Chinese Name 中文名" value={nameZh} onChangeText={handleFieldChange(setNameZh)} placeholder="中文姓名" />
+
           <EditField label="Gender 性別" value={gender} onChangeText={handleFieldChange(setGender)} placeholder="M / F / Other" />
         </View>
 
