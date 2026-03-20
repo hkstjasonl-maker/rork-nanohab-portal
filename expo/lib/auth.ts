@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import { supabase } from './supabase';
+import { supabase, authClient } from './supabase';
 import { Clinician, ClinicianTier, UserRole } from '@/types';
 
 const AUTH_STORAGE_KEY = 'nanohab_auth';
@@ -50,7 +50,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const parsed: StoredAuth = JSON.parse(stored);
 
       if (parsed.role === 'admin') {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await authClient.auth.getSession();
         if (session) {
           setAdminUser({ id: session.user.id, email: session.user.email || '' });
           setRole('admin');
@@ -90,7 +90,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, [restoreSession]);
 
   const loginAdmin = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
     if (!data.user) throw new Error('Login failed');
 
@@ -143,7 +143,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logout = useCallback(async () => {
     try {
       if (role === 'admin') {
-        await supabase.auth.signOut();
+        await authClient.auth.signOut();
       }
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
     } catch (e) {
