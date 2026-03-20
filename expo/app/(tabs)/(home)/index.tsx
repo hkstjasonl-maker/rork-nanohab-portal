@@ -55,30 +55,20 @@ export default function DashboardScreen() {
           .from('patients')
           .select('id')
           .eq('clinician_id', clinician.id);
-        if (patientsError) {
-          console.log('Dashboard programs patients error:', patientsError);
-          return 0;
-        }
-        const patientIds = (patients || []).map((p: { id: string }) => p.id);
-        if (patientIds.length === 0) return 0;
+        if (patientsError || !patients?.length) return 0;
+        const patientIds = patients.map((p: { id: string }) => p.id);
         const { count, error } = await supabase
           .from('exercise_programs')
           .select('id', { count: 'exact' })
           .in('patient_id', patientIds);
-        if (error) {
-          console.log('Dashboard programs error:', error);
-          return 0;
-        }
+        if (error) return 0;
         return count || 0;
       }
 
       const { count, error } = await supabase
         .from('exercise_programs')
         .select('id', { count: 'exact' });
-      if (error) {
-        console.log('Dashboard programs error:', error);
-        return 0;
-      }
+      if (error) return 0;
       return count || 0;
     },
   });
@@ -90,10 +80,7 @@ export default function DashboardScreen() {
         .from('exercise_media_requests')
         .select('id', { count: 'exact' })
         .eq('status', 'pending');
-      if (error) {
-        console.log('Dashboard media requests error:', error);
-        return 0;
-      }
+      if (error) return 0;
       return count || 0;
     },
     enabled: isAdmin,
@@ -102,15 +89,14 @@ export default function DashboardScreen() {
   const rentalRequestsQuery = useQuery({
     queryKey: ['dashboard-rental-requests'],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from('marketplace_rentals')
-        .select('id', { count: 'exact' })
-        .in('status', ['pending', 'cooling_off']);
-      if (error) {
-        console.log('Dashboard rental requests error:', error);
-        return 0;
-      }
-      return count || 0;
+      try {
+        const { count, error } = await supabase
+          .from('marketplace_rentals')
+          .select('id', { count: 'exact' })
+          .in('status', ['pending', 'cooling_off']);
+        if (error) return 0;
+        return count || 0;
+      } catch { return 0; }
     },
     enabled: isAdmin,
   });
@@ -119,22 +105,14 @@ export default function DashboardScreen() {
     queryKey: ['dashboard-notifications', role, clinician?.id, adminUser?.id],
     queryFn: async () => {
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from('notifications')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(5);
-
-          const { data, error } = await query;
-        if (error) {
-          console.log('Dashboard notifications error:', error);
-          return [];
-        }
+        if (error) return [];
         return (data || []) as Notification[];
-      } catch (e) {
-        console.log('Dashboard notifications exception:', e);
-        return [];
-      }
+      } catch { return []; }
     },
   });
 
@@ -178,50 +156,18 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.accent}
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
         }
       >
         <Text style={styles.sectionTitle}>Overview 總覽</Text>
 
         <View style={styles.statsGrid}>
-          <StatCard
-            icon={<Users size={22} color={Colors.accent} />}
-            label="Active Patients 活躍患者"
-            value={patientsQuery.data ?? '-'}
-            isLoading={patientsQuery.isLoading}
-            color={Colors.accent}
-            bgColor={Colors.accentLight}
-          />
-          <StatCard
-            icon={<ClipboardList size={22} color="#5B8DEF" />}
-            label="Programs 計劃"
-            value={programsQuery.data ?? '-'}
-            isLoading={programsQuery.isLoading}
-            color="#5B8DEF"
-            bgColor="#E8F0FE"
-          />
+          <StatCard icon={<Users size={22} color={Colors.accent} />} label="Active Patients 活躍患者" value={patientsQuery.data ?? '-'} isLoading={patientsQuery.isLoading} color={Colors.accent} bgColor={Colors.accentLight} />
+          <StatCard icon={<ClipboardList size={22} color="#5B8DEF" />} label="Programs 計劃" value={programsQuery.data ?? '-'} isLoading={programsQuery.isLoading} color="#5B8DEF" bgColor="#E8F0FE" />
           {isAdmin && (
             <>
-              <StatCard
-                icon={<ImagePlus size={22} color="#E5A100" />}
-                label="Media Requests 媒體請求"
-                value={mediaRequestsQuery.data ?? '-'}
-                isLoading={mediaRequestsQuery.isLoading}
-                color="#E5A100"
-                bgColor="#FFF8E5"
-              />
-              <StatCard
-                icon={<Package size={22} color="#34C759" />}
-                label="Rental Requests 租借請求"
-                value={rentalRequestsQuery.data ?? '-'}
-                isLoading={rentalRequestsQuery.isLoading}
-                color="#34C759"
-                bgColor="#E8F9ED"
-              />
+              <StatCard icon={<ImagePlus size={22} color="#E5A100" />} label="Media Requests 媒體請求" value={mediaRequestsQuery.data ?? '-'} isLoading={mediaRequestsQuery.isLoading} color="#E5A100" bgColor="#FFF8E5" />
+              <StatCard icon={<Package size={22} color="#34C759" />} label="Rental Requests 租借請求" value={rentalRequestsQuery.data ?? '-'} isLoading={rentalRequestsQuery.isLoading} color="#34C759" bgColor="#E8F9ED" />
             </>
           )}
         </View>
@@ -233,9 +179,7 @@ export default function DashboardScreen() {
           </View>
 
           {notificationsQuery.isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={Colors.accent} />
-            </View>
+            <View style={styles.loadingContainer}><ActivityIndicator color={Colors.accent} /></View>
           ) : (notificationsQuery.data?.length ?? 0) === 0 ? (
             <View style={styles.emptyNotifications}>
               <Bell size={32} color={Colors.borderLight} />
@@ -253,32 +197,12 @@ export default function DashboardScreen() {
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  isLoading,
-  color,
-  bgColor,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  isLoading: boolean;
-  color: string;
-  bgColor: string;
-}) {
+function StatCard({ icon, label, value, isLoading, color, bgColor }: { icon: React.ReactNode; label: string; value: number | string; isLoading: boolean; color: string; bgColor: string; }) {
   return (
     <View style={styles.statCard}>
-      <View style={[styles.statIconContainer, { backgroundColor: bgColor }]}>
-        {icon}
-      </View>
+      <View style={[styles.statIconContainer, { backgroundColor: bgColor }]}>{icon}</View>
       <View style={styles.statInfo}>
-        {isLoading ? (
-          <ActivityIndicator size="small" color={color} />
-        ) : (
-          <Text style={[styles.statValue, { color }]}>{value}</Text>
-        )}
+        {isLoading ? <ActivityIndicator size="small" color={color} /> : <Text style={[styles.statValue, { color }]}>{value}</Text>}
         <Text style={styles.statLabel} numberOfLines={2}>{label}</Text>
       </View>
     </View>
@@ -287,7 +211,6 @@ function StatCard({
 
 function NotificationItem({ notification }: { notification: Notification }) {
   const timeAgo = getTimeAgo(notification.created_at);
-
   return (
     <TouchableOpacity style={styles.notificationItem} activeOpacity={0.6}>
       <View style={styles.notificationDot} />
@@ -322,161 +245,31 @@ function getTimeAgo(dateString: string): string {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F0ED',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  greeting: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  roleBadge: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  roleBadgeText: {
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: '700' as const,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
-  statCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    width: '47%' as unknown as number,
-    flexGrow: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statIconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  statInfo: {
-    gap: 2,
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '800' as const,
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-    lineHeight: 16,
-  },
-  notificationsSection: {
-    gap: 8,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  emptyNotifications: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    paddingVertical: 40,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.textTertiary,
-    fontWeight: '500' as const,
-  },
-  emptyTextZh: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
-  notificationItem: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  notificationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.accent,
-  },
-  notificationDotRead: {
-    backgroundColor: Colors.borderLight,
-  },
-  notificationContent: {
-    flex: 1,
-    gap: 2,
-  },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  notificationBody: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-  },
-  notificationTime: {
-    fontSize: 11,
-    color: Colors.textTertiary,
-    marginTop: 2,
-  },
+  container: { flex: 1, backgroundColor: '#F2F0ED' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  greeting: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const },
+  userName: { fontSize: 22, fontWeight: '700' as const, color: Colors.text, letterSpacing: -0.3 },
+  roleBadge: { backgroundColor: Colors.accent, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  roleBadgeText: { color: Colors.white, fontSize: 12, fontWeight: '700' as const },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20, paddingTop: 12, paddingBottom: 40 },
+  sectionTitle: { fontSize: 16, fontWeight: '700' as const, color: Colors.text, marginBottom: 12 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
+  statCard: { backgroundColor: Colors.white, borderRadius: 16, padding: 16, width: '47%' as unknown as number, flexGrow: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  statIconContainer: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  statInfo: { gap: 2 },
+  statValue: { fontSize: 28, fontWeight: '800' as const, letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' as const, lineHeight: 16 },
+  notificationsSection: { gap: 8 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  loadingContainer: { paddingVertical: 32, alignItems: 'center' },
+  emptyNotifications: { backgroundColor: Colors.white, borderRadius: 16, paddingVertical: 40, alignItems: 'center', gap: 8 },
+  emptyText: { fontSize: 14, color: Colors.textTertiary, fontWeight: '500' as const },
+  emptyTextZh: { fontSize: 12, color: Colors.textTertiary },
+  notificationItem: { backgroundColor: Colors.white, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  notificationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.accent },
+  notificationContent: { flex: 1, gap: 2 },
+  notificationTitle: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
+  notificationBody: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17 },
+  notificationTime: { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
 });
