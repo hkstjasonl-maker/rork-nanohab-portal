@@ -5,22 +5,23 @@ export interface Clinician {
   full_name_zh?: string;
   tier_id?: string;
   organization?: string;
-  organization_zh?: string;
   phone?: string;
   is_active?: boolean;
   is_approved?: boolean;
   agreement_accepted_at?: string;
   interest_tags?: string[];
   last_login_at?: string;
+  max_patients?: number;
+  max_exercises?: number;
+  max_assessments?: number;
+  notes?: string;
   created_at?: string;
-  override_can_view_patients?: boolean | null;
-  override_can_edit_patients?: boolean | null;
-  override_can_create_patients?: boolean | null;
-  override_can_view_exercises?: boolean | null;
-  override_can_create_exercises?: boolean | null;
-  override_can_view_programs?: boolean | null;
+  updated_at?: string;
+  password_hash?: string;
+  login_token?: string;
+  approved_at?: string;
+  override_can_manage_patients?: boolean | null;
   override_can_create_programs?: boolean | null;
-  override_can_marketplace?: boolean | null;
   override_can_use_shared_exercises?: boolean | null;
   override_can_upload_exercises?: boolean | null;
   override_can_assign_assessments?: boolean | null;
@@ -34,40 +35,39 @@ export interface Clinician {
 export interface ClinicianTier {
   id: string;
   name: string;
-  can_view_patients: boolean;
-  can_edit_patients: boolean;
-  can_create_patients: boolean;
-  can_view_exercises: boolean;
-  can_create_exercises: boolean;
-  can_view_programs: boolean;
-  can_create_programs: boolean;
-  can_marketplace: boolean;
-  can_use_shared_exercises: boolean;
-  can_upload_exercises: boolean;
-  can_assign_assessments: boolean;
-  can_view_dashboard: boolean;
-  can_push_knowledge_videos: boolean;
-  can_push_feeding_skills: boolean;
-  can_manage_reinforcement: boolean;
-  can_send_notifications: boolean;
+  can_view_patients?: boolean;
+  can_edit_patients?: boolean;
+  can_create_patients?: boolean;
+  can_view_exercises?: boolean;
+  can_create_exercises?: boolean;
+  can_view_programs?: boolean;
+  can_create_programs?: boolean;
+  can_marketplace?: boolean;
+  can_use_shared_exercises?: boolean;
+  can_upload_exercises?: boolean;
+  can_assign_assessments?: boolean;
+  can_view_dashboard?: boolean;
+  can_push_knowledge_videos?: boolean;
+  can_push_feeding_skills?: boolean;
+  can_manage_reinforcement?: boolean;
+  can_send_notifications?: boolean;
 }
 
 export interface Patient {
   id: string;
   patient_name: string;
-  patient_name_zh?: string;
   access_code: string;
   diagnosis?: string;
-  diagnosis_zh?: string;
-  date_of_birth?: string;
-  gender?: string;
-  phone?: string;
   email?: string;
-  emergency_contact?: string;
-  emergency_phone?: string;
+  phone?: string;
   notes?: string;
+  is_active?: boolean;
   is_frozen: boolean;
   clinician_id: string;
+  therapist_name_en?: string;
+  therapist_name_zh?: string;
+  managing_org_name_en?: string;
+  managing_org_name_zh?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -76,9 +76,9 @@ export interface Notification {
   id: string;
   title_en: string;
   title_zh?: string;
-  body_en: string;
+  body_en?: string;
   body_zh?: string;
-  type: string;
+  type?: string;
   image_url?: string;
   video_url?: string;
   link_url?: string;
@@ -97,20 +97,24 @@ export interface Exercise {
   title_zh_hant?: string;
   title_zh_hans?: string;
   category?: string;
-  description_en?: string;
-  description_zh_hant?: string;
-  default_duration_minutes?: number;
-  vimeo_video_id?: string;
+  tags?: string[];
   youtube_video_id?: string;
+  vimeo_video_id?: string;
   audio_instruction_url_en?: string;
+  audio_instruction_url_zh_hant?: string;
   subtitle_url_en?: string;
-  live_subtitles?: boolean;
+  subtitle_url_zh_hant?: string;
+  default_duration_minutes?: number;
+  default_dosage?: string;
+  default_dosage_zh_hant?: string;
+  default_dosage_zh_hans?: string;
+  default_dosage_per_day?: number;
+  default_dosage_days_per_week?: number;
   media_status?: MediaStatus;
   created_by_clinician_id?: string;
   is_shared?: boolean;
   is_active?: boolean;
   created_at?: string;
-  updated_at?: string;
 }
 
 export interface SharedExercise {
@@ -126,14 +130,15 @@ export interface ExerciseMediaRequest {
   exercise_library_id: string;
   clinician_id: string;
   video_url?: string;
-  request_video: boolean;
-  request_audio: boolean;
-  request_subtitle: boolean;
-  request_live_subtitles: boolean;
+  request_video?: boolean;
+  request_audio?: boolean;
+  request_subtitle?: boolean;
+  request_live_subtitles?: boolean;
   declaration_accepted?: boolean;
   notes?: string;
   status?: string;
   rejection_reason?: string;
+  admin_notes?: string;
   reviewed_at?: string;
   created_at?: string;
 }
@@ -159,8 +164,7 @@ export interface ExerciseProgram {
 export interface ProgramExercise {
   id: string;
   program_id: string;
-  exercise_library_id: string;
-  sort_order: number;
+  exercise_library_id?: string;
   title_en?: string;
   title_zh_hant?: string;
   youtube_video_id?: string;
@@ -170,6 +174,7 @@ export interface ProgramExercise {
   dosage_zh_hant?: string;
   dosage_per_day?: number;
   dosage_days_per_week?: number;
+  sort_order: number;
   category?: string;
   modifications?: string;
   created_at?: string;
@@ -196,6 +201,7 @@ export interface MarketplaceListing {
   tags?: string[];
   screenshots?: string[];
   daily_rate_hkd?: number;
+  max_daily_rate_cap_hkd?: number;
   discount_tiers?: { min_days: number; discount_pct: number }[];
   approval_status: 'pending' | 'approved' | 'rejected';
   is_active: boolean;
@@ -204,6 +210,7 @@ export interface MarketplaceListing {
   total_rentals?: number;
   avg_rating?: number;
   review_count?: number;
+  show_clinician_name?: boolean;
   created_at?: string;
   updated_at?: string;
   exercise_library?: Exercise;
@@ -248,3 +255,4 @@ export interface AuthState {
   clinician: Clinician | null;
   clinicianTier: ClinicianTier | null;
 }
+
