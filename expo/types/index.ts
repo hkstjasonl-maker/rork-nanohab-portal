@@ -5,6 +5,7 @@ export interface Clinician {
   full_name_zh?: string;
   tier_id?: string;
   organization?: string;
+  organization_zh?: string;
   phone?: string;
   is_active?: boolean;
   is_approved?: boolean;
@@ -56,10 +57,15 @@ export interface ClinicianTier {
 export interface Patient {
   id: string;
   patient_name: string;
+  patient_name_zh?: string;
   access_code: string;
   diagnosis?: string;
+  diagnosis_zh?: string;
+  gender?: string;
   email?: string;
   phone?: string;
+  emergency_contact?: string;
+  emergency_phone?: string;
   notes?: string;
   is_active?: boolean;
   is_frozen: boolean;
@@ -222,7 +228,7 @@ export interface MarketplaceRental {
   listing_id: string;
   renting_clinician_id: string;
   owner_clinician_id?: string;
-  status: 'pending' | 'active' | 'expired' | 'cancelled' | 'disputed';
+  status: 'pending' | 'active' | 'expired' | 'cancelled' | 'disputed' | 'cooling_off';
   start_date: string;
   end_date: string;
   total_fee?: number;

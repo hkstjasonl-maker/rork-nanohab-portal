@@ -580,7 +580,7 @@ function ProgramFormModal({
     if (existingExercisesQuery.data && !exercisesLoaded) {
       const items: ProgramExerciseItem[] = existingExercisesQuery.data.map((pe) => ({
         id: pe.id,
-        exercise_id: pe.exercise_library_id,
+        exercise_id: pe.exercise_library_id || '',
         title: pe.exercise_library?.title_en || pe.title_en || 'Unknown',
         title_zh: pe.exercise_library?.title_zh_hant || pe.title_zh_hant,
         duration_minutes: pe.exercise_library?.default_duration_minutes || pe.duration_minutes,
@@ -1052,7 +1052,7 @@ function ExercisePickerModal({
           .from('exercise_library')
           .select('*')
           .eq('is_active', true)
-          .order('title', { ascending: true });
+          .order('title_en', { ascending: true });
         if (error) throw error;
         return (data || []) as Exercise[];
       }
