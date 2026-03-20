@@ -34,25 +34,14 @@ import {
   MessageSquare,
   Subtitles,
   Mic,
+  Play,
 } from 'lucide-react-native';
+import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Exercise, ExerciseMediaRequest } from '@/types';
-
-const CATEGORIES = [
-  'All',
-  'Articulation',
-  'Phonology',
-  'Fluency',
-  'Voice',
-  'Language',
-  'Swallowing',
-  'Oral Motor',
-  'Pragmatics',
-  'Other',
-];
 
 function getMediaStatusInfo(status?: string) {
   switch (status) {
@@ -74,6 +63,25 @@ export default function ExercisesScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const categoriesQuery = useQuery({
+    queryKey: ['exercise-categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exercise_library')
+        .select('category')
+        .not('category', 'is', null);
+      if (error) {
+        console.log('Categories fetch error:', error);
+        return ['All'];
+      }
+      const unique = Array.from(new Set((data || []).map((d: { category: string }) => d.category).filter(Boolean)));
+      unique.sort((a: string, b: string) => a.localeCompare(b));
+      return ['All', ...unique];
+    },
+  });
+
+  const categories = categoriesQuery.data || ['All'];
 
   const canCreateExercises = clinicianCan('create_exercises');
 
@@ -143,7 +151,7 @@ export default function ExercisesScreen() {
 
     if (selectedCategory !== 'All') {
       result = result.filter(
-        (e) => e.category?.toLowerCase() === selectedCategory.toLowerCase()
+        (e) => e.category === selectedCategory
       );
     }
 
@@ -288,6 +296,7 @@ export default function ExercisesScreen() {
       <CategoryFilterModal
         visible={showCategoryFilter}
         selected={selectedCategory}
+        categories={categories}
         onSelect={(cat) => {
           setSelectedCategory(cat);
           setShowCategoryFilter(false);
@@ -323,6 +332,11 @@ const ExerciseCard = React.memo(function ExerciseCard({
     ? exercise.default_duration_minutes
     : null;
 
+  const thumbnailUrl = exercise.youtube_video_id
+    ? `https://img.youtube.com/vi/${exercise.youtube_video_id}/mqdefault.jpg`
+    : null;
+  const hasVimeoOnly = !exercise.youtube_video_id && !!exercise.vimeo_video_id;
+
   return (
     <TouchableOpacity
       style={styles.exerciseCard}
@@ -330,6 +344,18 @@ const ExerciseCard = React.memo(function ExerciseCard({
       activeOpacity={0.7}
       testID={`exercise-card-${exercise.id}`}
     >
+      {thumbnailUrl ? (
+        <Image
+          source={{ uri: thumbnailUrl }}
+          style={styles.exerciseThumbnail}
+          resizeMode="cover"
+        />
+      ) : hasVimeoOnly ? (
+        <View style={styles.exerciseThumbnailPlaceholder}>
+          <Play size={32} color={Colors.white} />
+          <Text style={styles.thumbnailPlaceholderText}>Vimeo Video</Text>
+        </View>
+      ) : null}
       <View style={styles.exerciseCardTop}>
         <View style={styles.exerciseCardTitleRow}>
           <View style={{ flex: 1 }}>
@@ -402,11 +428,13 @@ const ExerciseCard = React.memo(function ExerciseCard({
 function CategoryFilterModal({
   visible,
   selected,
+  categories,
   onSelect,
   onClose,
 }: {
   visible: boolean;
   selected: string;
+  categories: string[];
   onSelect: (cat: string) => void;
   onClose: () => void;
 }) {
@@ -420,7 +448,7 @@ function CategoryFilterModal({
         <View style={styles.categoryModal}>
           <Text style={styles.categoryModalTitle}>Category 類別</Text>
           <ScrollView style={styles.categoryList} bounces={false}>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <TouchableOpacity
                 key={cat}
                 style={[
@@ -468,6 +496,21 @@ function AddExerciseModal({
   const [vimeoUrl, setVimeoUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [showMediaRequest, setShowMediaRequest] = useState(false);
+
+  const modalCategoriesQuery = useQuery({
+    queryKey: ['exercise-categories-modal'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exercise_library')
+        .select('category')
+        .not('category', 'is', null);
+      if (error) return [] as string[];
+      const unique = Array.from(new Set((data || []).map((d: { category: string }) => d.category).filter(Boolean))) as string[];
+      unique.sort((a, b) => a.localeCompare(b));
+      return unique;
+    },
+    enabled: visible,
+  });
 
   const [mrVideoRequired, setMrVideoRequired] = useState(true);
   const [mrAudioOptional, setMrAudioOptional] = useState(false);
@@ -621,7 +664,7 @@ function AddExerciseModal({
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Category 類別</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryPicker}>
-              {CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+              {(modalCategoriesQuery.data || []).map((cat: string) => (
                 <TouchableOpacity
                   key={cat}
                   style={[styles.categoryChip, category === cat && styles.categoryChipSelected]}
@@ -1006,15 +1049,36 @@ const styles = StyleSheet.create({
   exerciseCard: {
     backgroundColor: Colors.white,
     borderRadius: 14,
-    padding: 14,
+    overflow: 'hidden' as const,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
+  exerciseThumbnail: {
+    width: '100%' as const,
+    height: 120,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+  exerciseThumbnailPlaceholder: {
+    width: '100%' as const,
+    height: 120,
+    backgroundColor: '#2C2C2E',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+  },
+  thumbnailPlaceholderText: {
+    fontSize: 12,
+    color: Colors.white,
+    fontWeight: '500' as const,
+    opacity: 0.7,
+  },
   exerciseCardTop: {
     gap: 8,
+    padding: 14,
   },
   exerciseCardTitleRow: {
     flexDirection: 'row',
@@ -1071,8 +1135,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: 0,
     paddingTop: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
   },

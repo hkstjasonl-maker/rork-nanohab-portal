@@ -31,7 +31,8 @@ import { supabase } from '@/lib/supabase';
 
 interface Organisation {
   id: string;
-  name: string;
+  name?: string;
+  name_en?: string;
   name_zh?: string;
   contact_person?: string;
   email?: string;
@@ -58,45 +59,56 @@ export default function OrganisationsScreen() {
   const [address, setAddress] = useState('');
   const [isActive, setIsActive] = useState(true);
 
+  const [resolvedTable, setResolvedTable] = useState<string | null>(null);
+
   const orgsQuery = useQuery({
     queryKey: ['admin-organisations'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('organisations')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) {
-          if (error.message?.includes('does not exist') || error.code === '42P01') {
-            setTableExists(false);
-            return [];
+      const tablesToTry = ['organisations', 'organizations', 'partner_organisations', 'partner_organizations'];
+      for (const tableName of tablesToTry) {
+        try {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (error) {
+            if (error.message?.includes('does not exist') || error.code === '42P01') {
+              console.log(`Table '${tableName}' does not exist, trying next...`);
+              continue;
+            }
+            console.log(`Error querying '${tableName}':`, error);
+            continue;
           }
-          throw error;
+          console.log(`Found organisations in table '${tableName}', rows:`, data?.length);
+          setTableExists(true);
+          setResolvedTable(tableName);
+          return (data || []) as Organisation[];
+        } catch (e: any) {
+          console.log(`Exception querying '${tableName}':`, e?.message);
+          continue;
         }
-        setTableExists(true);
-        return (data || []) as Organisation[];
-      } catch (e: any) {
-        console.log('Error fetching organisations:', e);
-        if (e?.message?.includes('does not exist') || e?.code === '42P01') {
-          setTableExists(false);
-        }
-        return [];
       }
+      setTableExists(false);
+      return [];
     },
     enabled: isAdmin,
   });
+
+  const getOrgName = useCallback((org: Organisation): string => {
+    return org.name || org.name_en || '';
+  }, []);
 
   const filtered = useMemo(() => {
     if (!orgsQuery.data) return [];
     if (!search.trim()) return orgsQuery.data;
     const s = search.toLowerCase();
     return orgsQuery.data.filter(o =>
-      o.name?.toLowerCase().includes(s) ||
+      getOrgName(o)?.toLowerCase().includes(s) ||
       o.name_zh?.toLowerCase().includes(s) ||
       o.contact_person?.toLowerCase().includes(s) ||
       o.email?.toLowerCase().includes(s)
     );
-  }, [orgsQuery.data, search]);
+  }, [orgsQuery.data, search, getOrgName]);
 
   const openNew = useCallback(() => {
     setEditingOrg(null);
@@ -112,7 +124,7 @@ export default function OrganisationsScreen() {
 
   const openEdit = useCallback((org: Organisation) => {
     setEditingOrg(org);
-    setName(org.name || '');
+    setName(org.name || org.name_en || '');
     setNameZh(org.name_zh || '');
     setContactPerson(org.contact_person || '');
     setEmail(org.email || '');
@@ -125,8 +137,10 @@ export default function OrganisationsScreen() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('Name is required');
-      const payload = {
+      const table = resolvedTable || 'organisations';
+      const payload: Record<string, unknown> = {
         name: name.trim(),
+        name_en: name.trim(),
         name_zh: nameZh.trim() || null,
         contact_person: contactPerson.trim() || null,
         email: email.trim() || null,
@@ -135,10 +149,10 @@ export default function OrganisationsScreen() {
         is_active: isActive,
       };
       if (editingOrg) {
-        const { error } = await supabase.from('organisations').update(payload).eq('id', editingOrg.id);
+        const { error } = await supabase.from(table).update(payload).eq('id', editingOrg.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('organisations').insert(payload);
+        const { error } = await supabase.from(table).insert(payload);
         if (error) throw error;
       }
     },
@@ -231,7 +245,7 @@ export default function OrganisationsScreen() {
             <TouchableOpacity key={org.id} style={styles.card} onPress={() => openEdit(org)} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName}>{org.name}{org.name_zh ? ` ${org.name_zh}` : ''}</Text>
+                  <Text style={styles.cardName}>{org.name || org.name_en}{org.name_zh ? ` ${org.name_zh}` : ''}</Text>
                   {org.contact_person && <Text style={styles.cardSub}>{org.contact_person}</Text>}
                   {org.email && <Text style={styles.cardSub}>{org.email}</Text>}
                 </View>

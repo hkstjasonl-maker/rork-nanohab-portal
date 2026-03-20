@@ -24,6 +24,7 @@ import {
   Sun,
   X,
   ChevronRight,
+  Trash2,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -44,7 +45,7 @@ export default function PatientsScreen() {
     queryFn: async () => {
       let query = supabase
         .from('patients')
-        .select('*')
+        .select('*, clinicians(full_name)')
         .order('created_at', { ascending: false });
 
       if (!isAdmin && clinician?.id) {
@@ -56,9 +57,41 @@ export default function PatientsScreen() {
         console.log('Patients fetch error:', error);
         throw error;
       }
-      return (data || []) as Patient[];
+      return (data || []) as (Patient & { clinicians?: { full_name: string } | null })[];
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('patients').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['patients'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-patients'] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  const handleDelete = useCallback(
+    (patient: Patient) => {
+      Alert.alert(
+        'Delete Patient 刪除患者',
+        `Are you sure you want to delete ${patient.patient_name}?\n確定要刪除 ${patient.patient_name} 嗎？`,
+        [
+          { text: 'Cancel 取消', style: 'cancel' },
+          {
+            text: 'Delete 刪除',
+            style: 'destructive',
+            onPress: () => deleteMutation.mutate(patient.id),
+          },
+        ]
+      );
+    },
+    [deleteMutation]
+  );
 
   const filteredPatients = useMemo(() => {
     if (!patientsQuery.data) return [];
@@ -116,14 +149,16 @@ export default function PatientsScreen() {
   );
 
   const renderPatient = useCallback(
-    ({ item }: { item: Patient }) => (
+    ({ item }: { item: Patient & { clinicians?: { full_name: string } | null } }) => (
       <PatientCard
         patient={item}
+        clinicianName={item.clinicians?.full_name}
         onPress={() => router.push(`/patient/${item.id}`)}
         onFreeze={() => handleFreeze(item)}
+        onDelete={() => handleDelete(item)}
       />
     ),
-    [router, handleFreeze]
+    [router, handleFreeze, handleDelete]
   );
 
   const keyExtractor = useCallback((item: Patient) => item.id, []);
@@ -216,12 +251,16 @@ export default function PatientsScreen() {
 
 const PatientCard = React.memo(function PatientCard({
   patient,
+  clinicianName,
   onPress,
   onFreeze,
+  onDelete,
 }: {
   patient: Patient;
+  clinicianName?: string;
   onPress: () => void;
   onFreeze: () => void;
+  onDelete: () => void;
 }) {
   return (
     <TouchableOpacity
@@ -247,6 +286,11 @@ const PatientCard = React.memo(function PatientCard({
               {patient.diagnosis}
             </Text>
           )}
+          {clinicianName && (
+            <Text style={styles.patientClinician} numberOfLines={1}>
+              Clinician: {clinicianName}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -258,6 +302,13 @@ const PatientCard = React.memo(function PatientCard({
         </View>
 
         <View style={styles.patientActions}>
+          <TouchableOpacity
+            onPress={onDelete}
+            style={styles.freezeButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Trash2 size={16} color={Colors.danger} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={onFreeze}
             style={styles.freezeButton}
@@ -572,6 +623,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textTertiary,
     marginTop: 1,
+  },
+  patientClinician: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    fontStyle: 'italic' as const,
   },
   patientCardRight: {
     alignItems: 'flex-end',
