@@ -25,14 +25,14 @@ import {
   Plus,
   Trash2,
   Shield,
-  Video,
+  Utensils,
   Play,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-interface KnowledgeVideo {
+interface FeedingSkillVideo {
   id: string;
   title_en: string;
   title_zh?: string;
@@ -41,33 +41,19 @@ interface KnowledgeVideo {
   category?: string;
   vimeo_video_id?: string;
   youtube_video_id?: string;
-  thumbnail_url?: string;
-  duration_seconds?: number;
+  creator_name_en?: string;
+  creator_name_zh?: string;
   tags?: string[];
   is_active: boolean;
   created_at: string;
-  creator_name_en?: string;
-  creator_name_zh?: string;
-  provider_org_en?: string;
-  provider_org_zh?: string;
-  provider_logo_url?: string;
-  is_public?: boolean;
 }
 
-function getThumbnail(v: KnowledgeVideo): string | null {
+function getThumbnail(v: FeedingSkillVideo): string | null {
   if (v.youtube_video_id) return `https://img.youtube.com/vi/${v.youtube_video_id}/mqdefault.jpg`;
-  if (v.thumbnail_url) return v.thumbnail_url;
   return null;
 }
 
-function formatDuration(seconds?: number): string {
-  if (!seconds) return '—';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s > 0 ? `${s}s` : ''}`.trim() : `${s}s`;
-}
-
-export default function KnowledgeVideosScreen() {
+export default function FeedingSkillsScreen() {
   const { isAdmin } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -82,29 +68,23 @@ export default function KnowledgeVideosScreen() {
   const [category, setCategory] = useState('');
   const [youtubeId, setYoutubeId] = useState('');
   const [vimeoId, setVimeoId] = useState('');
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
-  const [durationSeconds, setDurationSeconds] = useState('');
-  const [tagsText, setTagsText] = useState('');
   const [creatorEn, setCreatorEn] = useState('');
   const [creatorZh, setCreatorZh] = useState('');
-  const [providerOrgEn, setProviderOrgEn] = useState('');
-  const [providerOrgZh, setProviderOrgZh] = useState('');
-  const [providerLogoUrl, setProviderLogoUrl] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
+  const [tagsText, setTagsText] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   const videosQuery = useQuery({
-    queryKey: ['admin-knowledge-videos'],
+    queryKey: ['admin-feeding-skills'],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('knowledge_videos')
+          .from('feeding_skill_videos')
           .select('*')
           .order('created_at', { ascending: false });
         if (error) throw error;
-        return (data || []) as KnowledgeVideo[];
+        return (data || []) as FeedingSkillVideo[];
       } catch (e) {
-        console.log('Error fetching knowledge videos:', e);
+        console.log('Error fetching feeding skill videos:', e);
         return [];
       }
     },
@@ -131,15 +111,9 @@ export default function KnowledgeVideosScreen() {
     setCategory('');
     setYoutubeId('');
     setVimeoId('');
-    setThumbnailUrl('');
-    setDurationSeconds('');
-    setTagsText('');
     setCreatorEn('');
     setCreatorZh('');
-    setProviderOrgEn('');
-    setProviderOrgZh('');
-    setProviderLogoUrl('');
-    setIsPublic(false);
+    setTagsText('');
     setIsActive(true);
   }, []);
 
@@ -148,7 +122,7 @@ export default function KnowledgeVideosScreen() {
     setModalVisible(true);
   }, [resetForm]);
 
-  const openEdit = useCallback((v: KnowledgeVideo) => {
+  const openEdit = useCallback((v: FeedingSkillVideo) => {
     setEditingId(v.id);
     setTitleEn(v.title_en || '');
     setTitleZh(v.title_zh || '');
@@ -157,15 +131,9 @@ export default function KnowledgeVideosScreen() {
     setCategory(v.category || '');
     setYoutubeId(v.youtube_video_id || '');
     setVimeoId(v.vimeo_video_id || '');
-    setThumbnailUrl(v.thumbnail_url || '');
-    setDurationSeconds(v.duration_seconds ? String(v.duration_seconds) : '');
-    setTagsText(Array.isArray(v.tags) ? v.tags.join(', ') : '');
     setCreatorEn(v.creator_name_en || '');
     setCreatorZh(v.creator_name_zh || '');
-    setProviderOrgEn(v.provider_org_en || '');
-    setProviderOrgZh(v.provider_org_zh || '');
-    setProviderLogoUrl(v.provider_logo_url || '');
-    setIsPublic(v.is_public ?? false);
+    setTagsText(Array.isArray(v.tags) ? v.tags.join(', ') : '');
     setIsActive(v.is_active ?? true);
     setModalVisible(true);
   }, []);
@@ -184,27 +152,21 @@ export default function KnowledgeVideosScreen() {
         category: category.trim() || null,
         youtube_video_id: youtubeId.trim() || null,
         vimeo_video_id: vimeoId.trim() || null,
-        thumbnail_url: thumbnailUrl.trim() || null,
-        duration_seconds: parseInt(durationSeconds, 10) || null,
-        tags: parsedTags,
         creator_name_en: creatorEn.trim() || null,
         creator_name_zh: creatorZh.trim() || null,
-        provider_org_en: providerOrgEn.trim() || null,
-        provider_org_zh: providerOrgZh.trim() || null,
-        provider_logo_url: providerLogoUrl.trim() || null,
-        is_public: isPublic,
+        tags: parsedTags,
         is_active: isActive,
       };
       if (editingId) {
-        const { error } = await supabase.from('knowledge_videos').update(payload).eq('id', editingId);
+        const { error } = await supabase.from('feeding_skill_videos').update(payload).eq('id', editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('knowledge_videos').insert(payload);
+        const { error } = await supabase.from('feeding_skill_videos').insert(payload);
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-videos'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-feeding-skills'] });
       setModalVisible(false);
     },
     onError: (error: Error) => {
@@ -214,11 +176,11 @@ export default function KnowledgeVideosScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('knowledge_videos').delete().eq('id', id);
+      const { error } = await supabase.from('feeding_skill_videos').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-videos'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-feeding-skills'] });
     },
     onError: (error: Error) => {
       Alert.alert('Error', error.message);
@@ -249,8 +211,8 @@ export default function KnowledgeVideosScreen() {
             <ChevronLeft size={24} color={Colors.white} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Knowledge Videos</Text>
-            <Text style={styles.headerSubtitle}>知識影片</Text>
+            <Text style={styles.headerTitle}>Feeding Skills</Text>
+            <Text style={styles.headerSubtitle}>餵食技巧</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -259,7 +221,7 @@ export default function KnowledgeVideosScreen() {
         <Search size={18} color={Colors.textTertiary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search videos..."
+          placeholder="Search feeding skills..."
           placeholderTextColor={Colors.textTertiary}
           value={search}
           onChangeText={setSearch}
@@ -283,9 +245,9 @@ export default function KnowledgeVideosScreen() {
           <ActivityIndicator size="large" color={Colors.accent} style={{ marginTop: 40 }} />
         ) : filtered.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Video size={40} color={Colors.textTertiary} />
-            <Text style={styles.emptyText}>No knowledge videos found</Text>
-            <Text style={styles.emptySubtext}>找不到知識影片</Text>
+            <Utensils size={40} color={Colors.textTertiary} />
+            <Text style={styles.emptyText}>No feeding skill videos found</Text>
+            <Text style={styles.emptySubtext}>找不到餵食技巧影片</Text>
           </View>
         ) : (
           filtered.map(v => {
@@ -298,15 +260,10 @@ export default function KnowledgeVideosScreen() {
                     <View style={styles.playOverlay}>
                       <Play size={20} color={Colors.white} fill={Colors.white} />
                     </View>
-                    {v.duration_seconds ? (
-                      <View style={styles.durationBadge}>
-                        <Text style={styles.durationText}>{formatDuration(v.duration_seconds)}</Text>
-                      </View>
-                    ) : null}
                   </View>
                 ) : (
                   <View style={styles.cardThumbPlaceholder}>
-                    <Video size={28} color={Colors.textTertiary} />
+                    <Utensils size={28} color={Colors.textTertiary} />
                   </View>
                 )}
                 <View style={styles.cardBody}>
@@ -329,9 +286,7 @@ export default function KnowledgeVideosScreen() {
                     <Text style={styles.statusLabel}>{v.is_active ? 'Active' : 'Inactive'}</Text>
                   </View>
                   {v.creator_name_en ? (
-                    <View style={styles.creatorRow}>
-                      <Text style={styles.creatorText}>By {v.creator_name_en}</Text>
-                    </View>
+                    <Text style={styles.creatorText}>By {v.creator_name_en}</Text>
                   ) : null}
                 </View>
               </TouchableOpacity>
@@ -351,7 +306,7 @@ export default function KnowledgeVideosScreen() {
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <X size={24} color={Colors.text} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{editingId ? 'Edit' : 'New'} Video</Text>
+              <Text style={styles.modalTitle}>{editingId ? 'Edit' : 'New'} Feeding Skill</Text>
               <TouchableOpacity onPress={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? (
                   <ActivityIndicator size="small" color={Colors.accent} />
@@ -362,8 +317,6 @@ export default function KnowledgeVideosScreen() {
             </View>
 
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              <Text style={styles.sectionHeader}>Basic Info 基本資料</Text>
-
               <Text style={styles.fieldLabel}>Title (EN) 標題 *</Text>
               <TextInput style={styles.input} value={titleEn} onChangeText={setTitleEn} placeholder="English title" placeholderTextColor={Colors.textTertiary} />
 
@@ -377,9 +330,7 @@ export default function KnowledgeVideosScreen() {
               <TextInput style={[styles.input, styles.multiline]} value={descZh} onChangeText={setDescZh} placeholder="中文描述" placeholderTextColor={Colors.textTertiary} multiline />
 
               <Text style={styles.fieldLabel}>Category 分類</Text>
-              <TextInput style={styles.input} value={category} onChangeText={setCategory} placeholder="e.g. Speech, Swallowing" placeholderTextColor={Colors.textTertiary} />
-
-              <Text style={styles.sectionHeader}>Video Sources 影片來源</Text>
+              <TextInput style={styles.input} value={category} onChangeText={setCategory} placeholder="e.g. Bottle, Spoon, Cup" placeholderTextColor={Colors.textTertiary} />
 
               <Text style={styles.fieldLabel}>YouTube Video ID</Text>
               <TextInput style={styles.input} value={youtubeId} onChangeText={setYoutubeId} placeholder="e.g. dQw4w9WgXcQ" placeholderTextColor={Colors.textTertiary} autoCapitalize="none" />
@@ -391,36 +342,14 @@ export default function KnowledgeVideosScreen() {
               <Text style={styles.fieldLabel}>Vimeo Video ID</Text>
               <TextInput style={styles.input} value={vimeoId} onChangeText={setVimeoId} placeholder="e.g. 123456789" placeholderTextColor={Colors.textTertiary} autoCapitalize="none" />
 
-              <Text style={styles.fieldLabel}>Thumbnail URL 縮圖</Text>
-              <TextInput style={styles.input} value={thumbnailUrl} onChangeText={setThumbnailUrl} placeholder="https://..." placeholderTextColor={Colors.textTertiary} autoCapitalize="none" keyboardType="url" />
-
-              <Text style={styles.fieldLabel}>Duration (seconds) 時長</Text>
-              <TextInput style={styles.input} value={durationSeconds} onChangeText={setDurationSeconds} placeholder="120" placeholderTextColor={Colors.textTertiary} keyboardType="number-pad" />
-
-              <Text style={styles.fieldLabel}>Tags 標籤 (comma-separated)</Text>
-              <TextInput style={styles.input} value={tagsText} onChangeText={setTagsText} placeholder="speech, therapy, adults" placeholderTextColor={Colors.textTertiary} />
-
-              <Text style={styles.sectionHeader}>Creator / Provider 創作者</Text>
-
               <Text style={styles.fieldLabel}>Creator Name (EN)</Text>
               <TextInput style={styles.input} value={creatorEn} onChangeText={setCreatorEn} placeholder="Creator name" placeholderTextColor={Colors.textTertiary} />
 
               <Text style={styles.fieldLabel}>Creator Name (繁中)</Text>
               <TextInput style={styles.input} value={creatorZh} onChangeText={setCreatorZh} placeholder="創作者姓名" placeholderTextColor={Colors.textTertiary} />
 
-              <Text style={styles.fieldLabel}>Provider Org (EN)</Text>
-              <TextInput style={styles.input} value={providerOrgEn} onChangeText={setProviderOrgEn} placeholder="Organisation name" placeholderTextColor={Colors.textTertiary} />
-
-              <Text style={styles.fieldLabel}>Provider Org (繁中)</Text>
-              <TextInput style={styles.input} value={providerOrgZh} onChangeText={setProviderOrgZh} placeholder="機構名稱" placeholderTextColor={Colors.textTertiary} />
-
-              <Text style={styles.fieldLabel}>Provider Logo URL</Text>
-              <TextInput style={styles.input} value={providerLogoUrl} onChangeText={setProviderLogoUrl} placeholder="https://..." placeholderTextColor={Colors.textTertiary} autoCapitalize="none" keyboardType="url" />
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Public 公開</Text>
-                <Switch value={isPublic} onValueChange={setIsPublic} trackColor={{ true: Colors.info, false: Colors.border }} thumbColor={Colors.white} />
-              </View>
+              <Text style={styles.fieldLabel}>Tags 標籤 (comma-separated)</Text>
+              <TextInput style={styles.input} value={tagsText} onChangeText={setTagsText} placeholder="feeding, infant, therapy" placeholderTextColor={Colors.textTertiary} />
 
               <View style={styles.switchRow}>
                 <Text style={styles.switchLabel}>Active 啟用</Text>
@@ -483,19 +412,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  durationBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  durationText: { fontSize: 11, color: Colors.white, fontWeight: '600' as const },
   cardThumbPlaceholder: {
     width: '100%',
-    height: 100,
+    height: 80,
     backgroundColor: Colors.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -505,12 +424,11 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '600' as const, color: Colors.text },
   cardTitleZh: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  catBadge: { backgroundColor: Colors.accentLight, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  catBadge: { backgroundColor: '#FFF0E6', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   catBadgeText: { fontSize: 11, fontWeight: '600' as const, color: Colors.accentDark },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusLabel: { fontSize: 12, color: Colors.textSecondary },
-  creatorRow: { marginTop: 4 },
-  creatorText: { fontSize: 12, color: Colors.textTertiary },
+  creatorText: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
   emptyWrap: { alignItems: 'center', marginTop: 60, gap: 6 },
   emptyText: { fontSize: 15, color: Colors.textTertiary },
   emptySubtext: { fontSize: 13, color: Colors.textTertiary },
@@ -547,15 +465,6 @@ const styles = StyleSheet.create({
   saveText: { fontSize: 16, fontWeight: '600' as const, color: Colors.accent },
   modalScroll: { flex: 1 },
   modalContent: { padding: 20, paddingBottom: 40 },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: Colors.accent,
-    marginTop: 20,
-    marginBottom: 4,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
   fieldLabel: { fontSize: 13, fontWeight: '500' as const, color: Colors.textSecondary, marginBottom: 6, marginTop: 14 },
   input: {
     backgroundColor: Colors.white,

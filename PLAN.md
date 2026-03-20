@@ -66,7 +66,10 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Organisations**: CRUD for organisations table (graceful fallback if table doesn't exist)
 - **Shared Exercises**: List from `shared_exercises` with exercise/clinician pickers, add via upsert on conflict, delete with confirmation
 - **Assessments**: List from `assessment_library` (graceful fallback if table doesn't exist), basic CRUD with category badges
-- **Placeholder screens**: Splash Ads, Therapist Settings, Managing Org, Marketing Draws, Flower Garden, Knowledge Videos — all show "Coming Soon 即將推出" with appropriate icons
+- **Splash Ads**: Full CRUD for `splash_ads` table — list with thumbnails, target type badges, date ranges, active toggle; add/edit modal with all fields
+- **Knowledge Videos**: Full CRUD for `knowledge_videos` table — list with YouTube/Vimeo thumbnails, category badges, duration, creator info; bilingual add/edit modal
+- **Feeding Skills**: Full CRUD for `feeding_skill_videos` table — list with video thumbnails, category badges, creator info; bilingual add/edit modal
+- **Placeholder screens**: Therapist Settings, Managing Org, Marketing Draws, Flower Garden — all show "Coming Soon 即將推出" with appropriate icons
 
 ### Settings
 - Profile info display
@@ -106,7 +109,10 @@ A professional clinical exercise prescription management portal for speech-langu
 17. **Organisations** — CRUD (or placeholder if table missing)
 18. **Shared Exercises** — Manage exercise-clinician sharing
 19. **Assessments** — CRUD (or placeholder if table missing)
-20. **Placeholder screens** — Splash Ads, Therapist Settings, Managing Org, Marketing Draws, Flower Garden, Knowledge Videos
+20. **Splash Ads** — Full CRUD with thumbnail preview, target type picker, date range, active toggle
+21. **Knowledge Videos** — Full CRUD with YouTube/Vimeo preview, bilingual fields, tags, creator/provider info
+22. **Feeding Skills** — Full CRUD for feeding skill videos with bilingual fields, tags, category
+23. **Placeholder screens** — Therapist Settings, Managing Org, Marketing Draws, Flower Garden
 
 ---
 
