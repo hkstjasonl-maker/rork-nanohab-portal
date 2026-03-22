@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { ShieldAlert } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { MarketplaceListing, Exercise } from '@/types';
@@ -50,7 +51,8 @@ function getApprovalInfo(status: ApprovalStatus) {
 export default function MyListingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { clinician } = useAuth();
+  const { clinician, isAdmin, clinicianCan } = useAuth();
+  const canListMarketplace = isAdmin || clinicianCan('upload_exercises');
   const [showAddModal, setShowAddModal] = useState(false);
 
   const listingsQuery = useQuery({
@@ -191,14 +193,26 @@ export default function MyListingsScreen() {
         />
       )}
 
-      <TouchableOpacity
-        style={[styles.fab, { bottom: 24 }]}
-        onPress={() => setShowAddModal(true)}
-        activeOpacity={0.85}
-        testID="add-listing-button"
-      >
-        <Plus size={24} color={Colors.white} />
-      </TouchableOpacity>
+      {canListMarketplace && (
+        <TouchableOpacity
+          style={[styles.fab, { bottom: 24 }]}
+          onPress={() => setShowAddModal(true)}
+          activeOpacity={0.85}
+          testID="add-listing-button"
+        >
+          <Plus size={24} color={Colors.white} />
+        </TouchableOpacity>
+      )}
+
+      {!canListMarketplace && (
+        <View style={styles.permissionBanner}>
+          <ShieldAlert size={16} color={Colors.warning} />
+          <Text style={styles.permissionBannerText}>
+            You don't have permission to create listings. Contact admin.
+            您沒有上架權限，請聯繫管理員。
+          </Text>
+        </View>
+      )}
 
       <NewListingModal
         visible={showAddModal}
@@ -775,5 +789,23 @@ const styles = StyleSheet.create({
   formInputMultiline: {
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  permissionBanner: {
+    position: 'absolute',
+    bottom: 24,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.warningLight,
+    borderRadius: 12,
+    padding: 12,
+  },
+  permissionBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#7A5A00',
+    lineHeight: 17,
   },
 });
