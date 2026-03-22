@@ -201,7 +201,7 @@ export default function ExerciseDetailScreen() {
           {isShared && (
             <View style={styles.sharedPill}>
               <Share2 size={12} color={Colors.info} />
-              <Text style={styles.sharedPillText}>Shared (Read-only)</Text>
+              <Text style={styles.sharedPillText}>Shared (Read-only) 共享（唯讀）</Text>
             </View>
           )}
         </View>
@@ -235,121 +235,189 @@ export default function ExerciseDetailScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Details 詳細資料</Text>
+        {isShared ? (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overview 概覽</Text>
 
-          <FieldRow label="Title 標題 *" editable={canEdit}>
-            <TextInput
-              style={[styles.input, !canEdit && styles.inputDisabled]}
-              value={title}
-              onChangeText={setTitle}
-              editable={canEdit}
-              placeholder="Exercise title"
-              placeholderTextColor={Colors.textTertiary}
-            />
-          </FieldRow>
-
-          <FieldRow label="Chinese Title 中文標題" editable={canEdit}>
-            <TextInput
-              style={[styles.input, !canEdit && styles.inputDisabled]}
-              value={titleZh}
-              onChangeText={setTitleZh}
-              editable={canEdit}
-              placeholder="運動標題"
-              placeholderTextColor={Colors.textTertiary}
-            />
-          </FieldRow>
-
-          <FieldRow label="Category 類別" editable={canEdit}>
-            {canEdit ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.chip, category === cat && styles.chipSelected]}
-                    onPress={() => setCategory(category === cat ? '' : cat)}
-                  >
-                    <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            ) : (
-              <View style={styles.readOnlyField}>
-                <Text style={styles.readOnlyText}>{category || '—'}</Text>
+              <View style={styles.sharedFieldGroup}>
+                <Text style={styles.sharedFieldLabel}>Title 標題</Text>
+                <Text style={styles.sharedFieldValue}>{exercise.title_en || '—'}</Text>
+                {exercise.title_zh_hant ? (
+                  <Text style={styles.sharedFieldValueZh}>{exercise.title_zh_hant}</Text>
+                ) : null}
               </View>
+
+              {category ? (
+                <View style={styles.sharedFieldGroup}>
+                  <Text style={styles.sharedFieldLabel}>Category 類別</Text>
+                  <View style={styles.sharedBadgeRow}>
+                    <View style={styles.infoBadge}>
+                      <Text style={styles.infoBadgeText}>{category}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {exercise.default_duration_minutes ? (
+                <View style={styles.sharedFieldGroup}>
+                  <Text style={styles.sharedFieldLabel}>Duration 時長</Text>
+                  <View style={styles.sharedBadgeRow}>
+                    <View style={styles.durationBadge}>
+                      <Clock size={14} color={Colors.textSecondary} />
+                      <Text style={styles.durationBadgeText}>{exercise.default_duration_minutes} min</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.sharedMediaInfo}>
+              <Text style={styles.sharedMediaLabel}>Media Sources 媒體來源</Text>
+              <View style={styles.sharedMediaBadges}>
+                {exercise.vimeo_video_id && (
+                  <View style={styles.mediaBadgeLarge}>
+                    <Video size={16} color={Colors.accent} />
+                    <Text style={styles.mediaBadgeLargeText}>Vimeo Video Available 有Vimeo影片</Text>
+                  </View>
+                )}
+                {exercise.youtube_video_id && (
+                  <View style={styles.mediaBadgeLarge}>
+                    <Video size={16} color="#FF0000" />
+                    <Text style={styles.mediaBadgeLargeText}>YouTube Video Available 有YouTube影片</Text>
+                  </View>
+                )}
+                {exercise.audio_instruction_url_en && (
+                  <View style={styles.mediaBadgeLarge}>
+                    <Headphones size={16} color={Colors.success} />
+                    <Text style={styles.mediaBadgeLargeText}>Audio Instructions Available 有音頻指示</Text>
+                  </View>
+                )}
+                {!exercise.vimeo_video_id && !exercise.youtube_video_id && !exercise.audio_instruction_url_en && (
+                  <Text style={styles.noMediaText}>No media attached 無媒體附件</Text>
+                )}
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Details 詳細資料</Text>
+
+            <FieldRow label="Title 標題 *" editable={canEdit}>
+              <TextInput
+                style={[styles.input, !canEdit && styles.inputDisabled]}
+                value={title}
+                onChangeText={setTitle}
+                editable={canEdit}
+                placeholder="Exercise title"
+                placeholderTextColor={Colors.textTertiary}
+              />
+            </FieldRow>
+
+            <FieldRow label="Chinese Title 中文標題" editable={canEdit}>
+              <TextInput
+                style={[styles.input, !canEdit && styles.inputDisabled]}
+                value={titleZh}
+                onChangeText={setTitleZh}
+                editable={canEdit}
+                placeholder="運動標題"
+                placeholderTextColor={Colors.textTertiary}
+              />
+            </FieldRow>
+
+            <FieldRow label="Category 類別" editable={canEdit}>
+              {canEdit ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                  {CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.chip, category === cat && styles.chipSelected]}
+                      onPress={() => setCategory(category === cat ? '' : cat)}
+                    >
+                      <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={styles.readOnlyField}>
+                  <Text style={styles.readOnlyText}>{category || '—'}</Text>
+                </View>
+              )}
+            </FieldRow>
+
+            <FieldRow label="Description 描述" editable={canEdit}>
+              <TextInput
+                style={[styles.input, styles.inputMultiline, !canEdit && styles.inputDisabled]}
+                value={description}
+                onChangeText={setDescription}
+                editable={canEdit}
+                placeholder="Exercise description"
+                placeholderTextColor={Colors.textTertiary}
+                multiline
+                numberOfLines={3}
+              />
+            </FieldRow>
+
+            <FieldRow label="Chinese Description 中文描述" editable={canEdit}>
+              <TextInput
+                style={[styles.input, styles.inputMultiline, !canEdit && styles.inputDisabled]}
+                value={descriptionZh}
+                onChangeText={setDescriptionZh}
+                editable={canEdit}
+                placeholder="運動描述"
+                placeholderTextColor={Colors.textTertiary}
+                multiline
+                numberOfLines={3}
+              />
+            </FieldRow>
+
+            <FieldRow label="Duration (minutes) 時長（分鐘）" editable={canEdit}>
+              <TextInput
+                style={[styles.input, !canEdit && styles.inputDisabled]}
+                value={durationSeconds}
+                onChangeText={setDurationSeconds}
+                editable={canEdit}
+                placeholder="e.g. 120"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="number-pad"
+              />
+            </FieldRow>
+
+            {(isAdmin || isOwn) && (
+              <>
+                {(canEdit || exercise.vimeo_video_id) && (
+                  <FieldRow label="Vimeo Video ID" editable={canEdit}>
+                    <TextInput
+                      style={[styles.input, !canEdit && styles.inputDisabled]}
+                      value={vimeoUrl}
+                      onChangeText={setVimeoUrl}
+                      editable={canEdit}
+                      placeholder="Vimeo ID"
+                      placeholderTextColor={Colors.textTertiary}
+                      autoCapitalize="none"
+                    />
+                  </FieldRow>
+                )}
+
+                {(canEdit || exercise.youtube_video_id) && (
+                  <FieldRow label="YouTube Video ID" editable={canEdit}>
+                    <TextInput
+                      style={[styles.input, !canEdit && styles.inputDisabled]}
+                      value={youtubeUrl}
+                      onChangeText={setYoutubeUrl}
+                      editable={canEdit}
+                      placeholder="YouTube ID"
+                      placeholderTextColor={Colors.textTertiary}
+                      autoCapitalize="none"
+                    />
+                  </FieldRow>
+                )}
+              </>
             )}
-          </FieldRow>
-
-          <FieldRow label="Description 描述" editable={canEdit}>
-            <TextInput
-              style={[styles.input, styles.inputMultiline, !canEdit && styles.inputDisabled]}
-              value={description}
-              onChangeText={setDescription}
-              editable={canEdit}
-              placeholder="Exercise description"
-              placeholderTextColor={Colors.textTertiary}
-              multiline
-              numberOfLines={3}
-            />
-          </FieldRow>
-
-          <FieldRow label="Chinese Description 中文描述" editable={canEdit}>
-            <TextInput
-              style={[styles.input, styles.inputMultiline, !canEdit && styles.inputDisabled]}
-              value={descriptionZh}
-              onChangeText={setDescriptionZh}
-              editable={canEdit}
-              placeholder="運動描述"
-              placeholderTextColor={Colors.textTertiary}
-              multiline
-              numberOfLines={3}
-            />
-          </FieldRow>
-
-          <FieldRow label="Duration (minutes) 時長（分鐘）" editable={canEdit}>
-            <TextInput
-              style={[styles.input, !canEdit && styles.inputDisabled]}
-              value={durationSeconds}
-              onChangeText={setDurationSeconds}
-              editable={canEdit}
-              placeholder="e.g. 120"
-              placeholderTextColor={Colors.textTertiary}
-              keyboardType="number-pad"
-            />
-          </FieldRow>
-
-          {(canEdit || exercise.vimeo_video_id) && (
-            <FieldRow label="Vimeo Video ID" editable={canEdit}>
-              <TextInput
-                style={[styles.input, !canEdit && styles.inputDisabled]}
-                value={vimeoUrl}
-                onChangeText={setVimeoUrl}
-                editable={canEdit}
-                placeholder="https://vimeo.com/..."
-                placeholderTextColor={Colors.textTertiary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-            </FieldRow>
-          )}
-
-          {(canEdit || exercise.youtube_video_id) && (
-            <FieldRow label="YouTube Video ID" editable={canEdit}>
-              <TextInput
-                style={[styles.input, !canEdit && styles.inputDisabled]}
-                value={youtubeUrl}
-                onChangeText={setYoutubeUrl}
-                editable={canEdit}
-                placeholder="https://youtube.com/..."
-                placeholderTextColor={Colors.textTertiary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-            </FieldRow>
-          )}
-        </View>
+          </View>
+        )}
 
         <View style={styles.metaSection}>
           <Text style={styles.metaLabel}>Created 建立時間</Text>
@@ -556,5 +624,88 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
     fontWeight: '500' as const,
+  },
+  sharedFieldGroup: {
+    gap: 4,
+  },
+  sharedFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  sharedFieldValue: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginLeft: 4,
+  },
+  sharedFieldValueZh: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  sharedBadgeRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    marginTop: 2,
+  },
+  infoBadge: {
+    backgroundColor: Colors.accentLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  infoBadgeText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
+  },
+  durationBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  durationBadgeText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.textSecondary,
+  },
+  sharedMediaInfo: {
+    backgroundColor: Colors.infoLight,
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  sharedMediaLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.info,
+  },
+  sharedMediaBadges: {
+    gap: 8,
+  },
+  mediaBadgeLarge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 8,
+    padding: 10,
+  },
+  mediaBadgeLargeText: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '500' as const,
+  },
+  noMediaText: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+    fontStyle: 'italic' as const,
   },
 });
