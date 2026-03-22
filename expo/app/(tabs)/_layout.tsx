@@ -5,7 +5,7 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 
 export default function TabLayout() {
-  const { isAdmin, clinicianCan } = useAuth();
+  const { isAdmin } = useAuth();
 
   return (
     <Tabs
@@ -71,7 +71,7 @@ export default function TabLayout() {
         options={{
           title: 'Admin',
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
-          href: (isAdmin || clinicianCan('assign_assessments')) ? '/admin' : null,
+          href: isAdmin ? '/admin' : null,
         }}
       />
       <Tabs.Screen

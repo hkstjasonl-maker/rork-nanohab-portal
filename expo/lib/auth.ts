@@ -160,7 +160,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const clinicianCan = useCallback((feature: string): boolean => {
     if (role === 'admin') return true;
-    console.log('clinicianCan check:', feature, 'override:', clinician?.[`override_can_${feature}` as keyof Clinician], 'tier:', clinicianTier?.[`can_${feature}` as keyof ClinicianTier]);
     if (!clinician) {
       console.log(`clinicianCan(${feature}): no clinician`);
       return false;

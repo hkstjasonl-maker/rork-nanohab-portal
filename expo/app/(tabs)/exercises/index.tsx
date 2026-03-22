@@ -88,7 +88,7 @@ export default function ExercisesScreen() {
 
   const categories = categoriesQuery.data || ['All'];
 
-  const canCreateExercises = isAdmin || clinicianCan('upload_exercises');
+  const canCreateExercises = clinicianCan('create_exercises');
 
   const exercisesQuery = useQuery({
     queryKey: ['exercises', isAdmin, clinician?.id],

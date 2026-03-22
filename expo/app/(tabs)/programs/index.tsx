@@ -34,7 +34,6 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient, ExerciseProgram, ProgramExercise, Exercise } from '@/types';
 
-const DEBUG_MODE = true;
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABELS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -62,13 +61,11 @@ function getScheduleLabel(program: ExerciseProgram): string {
 export default function ProgramsScreen() {
   const insets = useSafeAreaInsets();
   const { isAdmin, clinician, clinicianTier, clinicianCan } = useAuth();
-  console.log('ProgramsScreen render - isAdmin:', isAdmin, 'clinician:', clinician?.id);
   const queryClient = useQueryClient();
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [showNewProgramModal, setShowNewProgramModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState<ExerciseProgram | null>(null);
-
 
   const canCreatePrograms = isAdmin || clinicianCan('create_programs');
 
@@ -79,26 +76,27 @@ export default function ProgramsScreen() {
   const patientsQuery = useQuery({
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
+      console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
       try {
         let query = supabase
           .from('patients')
-          .select('id, patient_name, patient_name_zh, access_code, is_frozen');
+          .select('id, patient_name, patient_name_zh, access_code, is_frozen')
+          .eq('is_frozen', false)
+          .order('patient_name', { ascending: true });
 
         if (!isAdmin && clinician?.id) {
           query = query.eq('clinician_id', clinician.id);
         }
 
-        const { data, error } = await query.order('patient_name', { ascending: true });
-        if (error) throw error;
-
-        return (data || []).map(p => ({
-          id: p.id,
-          patient_name: p.patient_name || 'Unknown',
-          patient_name_zh: p.patient_name_zh || '',
-          access_code: p.access_code || '',
-          is_frozen: p.is_frozen || false,
-        }));
-      } catch {
+        const { data, error } = await query;
+        if (error) {
+          console.log('Program patients fetch error:', error);
+          return [];
+        }
+        console.log('Program patients fetched:', data?.length);
+        return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
+      } catch (e) {
+        console.log('Program patients query exception:', e);
         return [];
       }
     },
@@ -132,7 +130,7 @@ export default function ProgramsScreen() {
   });
 
   const programExercisesQuery = useQuery({
-    queryKey: ['program-exercises', selectedPatientId, programsQuery.data?.map(p => p.id).join(',') ?? ''],
+    queryKey: ['program-exercises', selectedPatientId],
     queryFn: async () => {
       if (!selectedPatientId || !programsQuery.data?.length) return {};
       const programIds = programsQuery.data.map((p) => p.id);
@@ -156,7 +154,7 @@ export default function ProgramsScreen() {
       });
       return grouped;
     },
-    enabled: !!selectedPatientId && !programsQuery.isLoading && !programsQuery.isFetching && (programsQuery.data?.length ?? 0) > 0,
+    enabled: !!selectedPatientId && (programsQuery.data?.length ?? 0) > 0,
   });
 
   const deleteProgramMutation = useMutation({
@@ -233,19 +231,6 @@ export default function ProgramsScreen() {
           {programsQuery.data?.length ?? 0} program{(programsQuery.data?.length ?? 0) !== 1 ? 's' : ''}
         </Text>
       </View>
-
-
-      {DEBUG_MODE && selectedPatientId && (
-        <View style={{ backgroundColor: 'red', padding: 8 }}>
-          <Text style={{ color: 'white', fontSize: 11 }}>
-            [DEBUG] Patient: {selectedPatientId?.slice(0,8)}{'\n'}
-            Programs loaded: {programsQuery.data?.length ?? 0} | Programs loading: {String(programsQuery.isLoading)}{'\n'}
-            Exercise groups: {Object.keys(programExercisesQuery.data ?? {}).length} | Ex loading: {String(programExercisesQuery.isLoading)}{'\n'}
-            Ex error: {programExercisesQuery.error ? String(programExercisesQuery.error) : 'none'}{'\n'}
-            Role: {isAdmin ? 'admin' : 'clinician'} | Clinician ID: {clinician?.id?.slice(0,8) ?? 'none'} | Patients: {patientsQuery.data?.length ?? 0}
-          </Text>
-        </View>
-      )}
 
       <TouchableOpacity
         style={styles.patientSelector}

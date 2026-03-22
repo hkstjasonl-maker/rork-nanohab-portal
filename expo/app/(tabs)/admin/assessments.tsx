@@ -34,8 +34,6 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-const DEBUG_MODE = true;
-
 interface Assessment {
   id: string;
   name_en: string;
@@ -61,10 +59,6 @@ interface AssignedAssessment {
   patients?: {
     patient_name: string;
   } | null;
-  assessment_library?: {
-    name_en: string;
-    name_zh?: string;
-  } | null;
 }
 
 interface PatientPick {
@@ -75,9 +69,11 @@ interface PatientPick {
 
 type TabType = 'library' | 'assigned';
 
+const ASSESSMENT_NAMES = ['EAT-10', 'FOIS', 'SWAL-QOL', 'FDA-2', 'DHI', 'D-TOMs', 'COAST', 'SUS', 'Other'];
+
 
 export default function AssessmentsScreen() {
-  const { isAdmin, clinicianCan, clinician } = useAuth();
+  const { isAdmin } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -100,19 +96,10 @@ export default function AssessmentsScreen() {
 
 
   const [assignNotes, setAssignNotes] = useState('');
-  const [assignAssessmentId, setAssignAssessmentId] = useState<string | null>(null);
+  const [assignAssessmentName, setAssignAssessmentName] = useState<string>('EAT-10');
   const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
-  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
-  const [assessmentSearch, setAssessmentSearch] = useState('');
-
-  const canAccessAssessments = isAdmin || clinicianCan('assign_assessments');
-
-  React.useEffect(() => {
-    if (!isAdmin) {
-      setActiveTab('assigned');
-    }
-  }, [isAdmin]);
+  const [showAssessmentNamePicker, setShowAssessmentNamePicker] = useState(false);
 
   const assessmentsQuery = useQuery({
     queryKey: ['admin-assessments'],
@@ -140,7 +127,7 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: canAccessAssessments,
+    enabled: isAdmin,
   });
 
   const assignedQuery = useQuery({
@@ -149,7 +136,7 @@ export default function AssessmentsScreen() {
       try {
         const { data, error } = await supabase
           .from('assessment_submissions')
-          .select('*, patients(patient_name), assessment_library(name_en, name_zh)')
+          .select('*, patients(patient_name)')
           .order('assigned_at', { ascending: false });
         if (error) {
           console.log('Assigned assessments error:', error);
@@ -161,45 +148,18 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: canAccessAssessments && activeTab === 'assigned',
-  });
-
-  const assessmentLibraryQuery = useQuery({
-    queryKey: ['assessment-library-options'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('assessment_library')
-          .select('id, name_en, name_zh, category')
-          .eq('is_active', true)
-          .order('name_en');
-        if (error) {
-          console.log('Error fetching assessment library:', error);
-          return [];
-        }
-        return (data || []) as Assessment[];
-      } catch (e) {
-        console.log('Assessment library options exception:', e);
-        return [];
-      }
-    },
-    enabled: canAccessAssessments,
+    enabled: isAdmin && activeTab === 'assigned',
   });
 
   const patientsQuery = useQuery({
     queryKey: ['assign-patients'],
     queryFn: async () => {
       try {
-        let patientQuery = supabase
+        const { data, error } = await supabase
           .from('patients')
           .select('id, patient_name, access_code')
           .eq('is_frozen', false)
           .order('patient_name', { ascending: true });
-
-        if (!isAdmin && clinician?.id) {
-          patientQuery = patientQuery.eq('clinician_id', clinician.id);
-        }
-        const { data, error } = await patientQuery;
         if (error) throw error;
         return (data || []) as PatientPick[];
       } catch (e) {
@@ -207,7 +167,7 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: canAccessAssessments && assignModalVisible,
+    enabled: isAdmin && assignModalVisible,
   });
 
   const filteredPatients = useMemo(() => {
@@ -239,26 +199,11 @@ export default function AssessmentsScreen() {
     if (!search.trim()) return assignedQuery.data;
     const s = search.toLowerCase();
     return assignedQuery.data.filter(a =>
-      a.assessment_library?.name_en?.toLowerCase().includes(s) ||
-      a.assessment_library?.name_zh?.toLowerCase().includes(s) ||
+      a.assessment_id?.toLowerCase().includes(s) ||
       a.patients?.patient_name?.toLowerCase().includes(s) ||
       a.status?.toLowerCase().includes(s)
     );
   }, [assignedQuery.data, search]);
-
-  const filteredAssessmentOptions = useMemo(() => {
-    if (!assessmentLibraryQuery.data) return [];
-    if (!assessmentSearch.trim()) return assessmentLibraryQuery.data;
-    const s = assessmentSearch.toLowerCase();
-    return assessmentLibraryQuery.data.filter(a =>
-      a.name_en?.toLowerCase().includes(s) ||
-      a.name_zh?.toLowerCase().includes(s)
-    );
-  }, [assessmentLibraryQuery.data, assessmentSearch]);
-
-  const selectedAssessmentOption = useMemo(() => {
-    return assessmentLibraryQuery.data?.find(a => a.id === assignAssessmentId) || null;
-  }, [assessmentLibraryQuery.data, assignAssessmentId]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -277,10 +222,11 @@ export default function AssessmentsScreen() {
     setAssigningAssessment(a);
     setAssignFromTab(false);
     setAssignPatientId(null);
+
+
     setAssignNotes('');
-    setAssignAssessmentId(a.id);
+    setAssignAssessmentName(a.name_en || 'EAT-10');
     setPatientSearch('');
-    setAssessmentSearch('');
     setAssignModalVisible(true);
   }, []);
 
@@ -288,10 +234,11 @@ export default function AssessmentsScreen() {
     setAssigningAssessment(null);
     setAssignFromTab(true);
     setAssignPatientId(null);
+
+
     setAssignNotes('');
-    setAssignAssessmentId(null);
+    setAssignAssessmentName('EAT-10');
     setPatientSearch('');
-    setAssessmentSearch('');
     setAssignModalVisible(true);
   }, []);
 
@@ -321,17 +268,17 @@ export default function AssessmentsScreen() {
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      if (!assignPatientId) throw new Error('Please select a patient 請選擇患者');
-      const assessmentId = assignFromTab ? assignAssessmentId : (assigningAssessment?.id || assignAssessmentId);
-      if (!assessmentId) throw new Error('Please select an assessment 請選擇評估');
+      if (!assignPatientId) throw new Error('Please select a patient');
+      const assessmentName = assignFromTab ? assignAssessmentName : (assigningAssessment?.name_en || assignAssessmentName);
+      if (!assessmentName) throw new Error('Please select an assessment');
 
-      console.log('Assigning assessment, patient:', assignPatientId, 'assessment_id (UUID):', assessmentId);
       const { error } = await supabase.from('assessment_submissions').insert({
         patient_id: assignPatientId,
-        assessment_id: assessmentId,
+        assessment_id: assessmentName,
         assigned_by: null,
         assigned_at: new Date().toISOString(),
         status: 'pending',
+        language: 'en',
         notes: assignNotes.trim() || null,
       });
       if (error) throw error;
@@ -364,10 +311,9 @@ export default function AssessmentsScreen() {
   });
 
   const handleDeleteAssigned = useCallback((item: AssignedAssessment) => {
-    const displayName = item.assessment_library?.name_en || item.assessment_id || 'Assessment';
     Alert.alert(
       'Delete Assessment 刪除評估',
-      `Remove "${displayName}" for ${item.patients?.patient_name || 'this patient'}?\n確定要刪除此評估嗎？`,
+      `Remove "${item.assessment_id}" for ${item.patients?.patient_name || 'this patient'}?\n確定要刪除此評估嗎？`,
       [
         { text: 'Cancel 取消', style: 'cancel' },
         { text: 'Delete 刪除', style: 'destructive', onPress: () => deleteAssignedMutation.mutate(item.id) },
@@ -399,11 +345,11 @@ export default function AssessmentsScreen() {
     );
   }, [deleteMutation]);
 
-  if (!canAccessAssessments) {
+  if (!isAdmin) {
     return (
       <View style={styles.centered}>
         <Shield size={48} color={Colors.textTertiary} />
-        <Text style={styles.noAccessText}>Access required{'\n'}請聯繫管理員獲取評估權限</Text>
+        <Text style={styles.noAccessText}>Admin access required</Text>
       </View>
     );
   }
@@ -432,15 +378,13 @@ export default function AssessmentsScreen() {
       </SafeAreaView>
 
       <View style={styles.tabBar}>
-        {isAdmin && (
-          <TouchableOpacity
-            style={[styles.tabItem, isLibraryTab && styles.tabItemActive]}
-            onPress={() => { setActiveTab('library'); setSearch(''); }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabText, isLibraryTab && styles.tabTextActive]}>Library 評估庫</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.tabItem, isLibraryTab && styles.tabItemActive]}
+          onPress={() => { setActiveTab('library'); setSearch(''); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, isLibraryTab && styles.tabTextActive]}>Library 評估庫</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, isAssignedTab && styles.tabItemActive]}
           onPress={() => { setActiveTab('assigned'); setSearch(''); }}
@@ -449,14 +393,6 @@ export default function AssessmentsScreen() {
           <Text style={[styles.tabText, isAssignedTab && styles.tabTextActive]}>Assigned 已分配</Text>
         </TouchableOpacity>
       </View>
-
-      {DEBUG_MODE && (
-        <View style={{ backgroundColor: 'red', padding: 6 }}>
-          <Text style={{ color: 'white', fontSize: 11 }}>
-            [DEBUG] isAdmin: {String(isAdmin)} | canAssignAssessments: {String(clinicianCan('assign_assessments'))} | activeTab: {activeTab}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.searchContainer}>
         <Search size={18} color={Colors.textTertiary} />
@@ -564,9 +500,7 @@ export default function AssessmentsScreen() {
 
                   <View style={styles.assignedMeta}>
                     <View style={styles.assessmentNameBadge}>
-                      <Text style={styles.assessmentNameText}>
-                        {item.assessment_library?.name_en || item.assessment_id || 'Unknown'}
-                      </Text>
+                      <Text style={styles.assessmentNameText}>{item.assessment_id}</Text>
                     </View>
                     <View style={[styles.timepointBadge, { backgroundColor: item.status === 'completed' ? Colors.successLight : item.status === 'pending' ? Colors.warningLight : Colors.surfaceSecondary }]}>
                       <View style={[styles.timepointDotSmall, { backgroundColor: item.status === 'completed' ? Colors.success : item.status === 'pending' ? Colors.warning : Colors.textTertiary }]} />
@@ -663,17 +597,13 @@ export default function AssessmentsScreen() {
 
               {assignFromTab && (
                 <>
-                  <Text style={styles.fieldLabel}>Assessment 評估 *</Text>
+                  <Text style={styles.fieldLabel}>Assessment Name 評估名稱 *</Text>
                   <TouchableOpacity
                     style={styles.pickerBtn}
-                    onPress={() => setShowAssessmentPicker(true)}
+                    onPress={() => setShowAssessmentNamePicker(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.pickerBtnText, !selectedAssessmentOption && { color: Colors.textTertiary }]}>
-                      {selectedAssessmentOption
-                        ? `${selectedAssessmentOption.name_en}${selectedAssessmentOption.name_zh ? ` ${selectedAssessmentOption.name_zh}` : ''}`
-                        : 'Select assessment...'}
-                    </Text>
+                    <Text style={styles.pickerBtnText}>{assignAssessmentName}</Text>
                     <ChevronDown size={16} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 </>
@@ -743,38 +673,23 @@ export default function AssessmentsScreen() {
           </TouchableOpacity>
         </Modal>
 
-        <Modal visible={showAssessmentPicker} animationType="fade" transparent>
-          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowAssessmentPicker(false)}>
+        <Modal visible={showAssessmentNamePicker} animationType="fade" transparent>
+          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowAssessmentNamePicker(false)}>
             <View style={styles.pickerModal}>
               <Text style={styles.pickerModalTitle}>Select Assessment 選擇評估</Text>
-              <View style={styles.pickerSearchRow}>
-                <Search size={16} color={Colors.textTertiary} />
-                <TextInput
-                  style={styles.pickerSearchInput}
-                  value={assessmentSearch}
-                  onChangeText={setAssessmentSearch}
-                  placeholder="Search..."
-                  placeholderTextColor={Colors.textTertiary}
-                  autoCorrect={false}
-                />
-              </View>
               <FlatList
-                data={filteredAssessmentOptions}
-                keyExtractor={a => a.id}
+                data={ASSESSMENT_NAMES}
+                keyExtractor={name => name}
                 style={styles.pickerList}
-                renderItem={({ item: a }) => (
+                renderItem={({ item: name }) => (
                   <TouchableOpacity
-                    style={[styles.pickerItem, assignAssessmentId === a.id && styles.pickerItemSelected]}
-                    onPress={() => { setAssignAssessmentId(a.id); setShowAssessmentPicker(false); }}
+                    style={[styles.pickerItem, assignAssessmentName === name && styles.pickerItemSelected]}
+                    onPress={() => { setAssignAssessmentName(name); setShowAssessmentNamePicker(false); }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.pickerItemName}>{a.name_en}</Text>
-                      {a.name_zh ? <Text style={styles.pickerItemCode}>{a.name_zh}</Text> : null}
-                    </View>
-                    {assignAssessmentId === a.id && <Check size={16} color={Colors.accent} />}
+                    <Text style={styles.pickerItemName}>{name}</Text>
+                    {assignAssessmentName === name && <Check size={16} color={Colors.accent} />}
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={<Text style={styles.pickerEmpty}>No assessments found</Text>}
               />
             </View>
           </TouchableOpacity>
