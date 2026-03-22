@@ -60,7 +60,8 @@ function getScheduleLabel(program: ExerciseProgram): string {
 
 export default function ProgramsScreen() {
   const insets = useSafeAreaInsets();
-  const { isAdmin, clinician, clinicianTier, clinicianCan } = useAuth();
+  const { isAdmin, clinician, clinicianTier, clinicianCan, role } = useAuth();
+  console.log('ProgramsScreen render - isAdmin:', isAdmin, 'clinician:', clinician?.id);
   const queryClient = useQueryClient();
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
@@ -76,6 +77,10 @@ export default function ProgramsScreen() {
   const patientsQuery = useQuery({
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
+      console.log('=== PROGRAMS DEBUG ===');
+      console.log('isAdmin:', isAdmin);
+      console.log('clinician:', clinician?.id);
+      console.log('role:', role);
       console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
       try {
         let query = supabase
@@ -89,6 +94,7 @@ export default function ProgramsScreen() {
         }
 
         const { data, error } = await query;
+        console.log('Patients result:', data?.length, 'error:', error);
         if (error) {
           console.log('Program patients fetch error:', error);
           return [];
