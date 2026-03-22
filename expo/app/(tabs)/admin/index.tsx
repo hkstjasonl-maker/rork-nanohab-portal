@@ -26,6 +26,7 @@ import {
   Utensils,
   ClipboardCheck,
   Volume2,
+  Crown,
   Shield,
   ChevronRight,
 } from 'lucide-react-native';
@@ -60,6 +61,7 @@ const sections: AdminSection[] = [
   { key: 'reinforcement', titleEn: 'Reinforcement', titleZh: '強化音訊', icon: <Volume2 size={ICON_SIZE} color="#5CA0E0" />, route: '/admin/reinforcement' },
   { key: 'shared-exercises', titleEn: 'Shared Exercises', titleZh: '共享運動', icon: <Share2 size={ICON_SIZE} color={Colors.accent} />, route: '/admin/shared-exercises', countKey: 'shared_exercises' },
   { key: 'assessments', titleEn: 'Assessments', titleZh: '評估庫', icon: <ClipboardCheck size={ICON_SIZE} color="#2EAADC" />, route: '/admin/assessments' },
+  { key: 'tier-management', titleEn: 'Tier Management', titleZh: '級別管理', icon: <Crown size={ICON_SIZE} color="#D4A030" />, route: '/admin/tier-management', countKey: 'clinician_tiers' },
 ];
 
 export default function AdminHubScreen() {
@@ -124,6 +126,11 @@ export default function AdminHubScreen() {
         const { count: orgCount } = await supabase.from('organisations').select('*', { count: 'exact', head: true });
         counts.organisations = orgCount ?? 0;
       } catch (e) { console.log('Error fetching organisations count:', e); }
+
+      try {
+        const { count: tierCount } = await supabase.from('clinician_tiers').select('*', { count: 'exact', head: true });
+        counts.clinician_tiers = tierCount ?? 0;
+      } catch (e) { console.log('Error fetching tier count:', e); }
 
       return counts;
     },
