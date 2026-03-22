@@ -67,11 +67,9 @@ export default function ProgramsScreen() {
   const [showNewProgramModal, setShowNewProgramModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState<ExerciseProgram | null>(null);
 
-  const canViewPrograms = clinicianCan('view_programs');
-  const canCreatePrograms = clinicianCan('create_programs');
-  const hasAccess = isAdmin || canViewPrograms || canCreatePrograms;
+  const canCreatePrograms = isAdmin || clinicianCan('create_programs');
 
-  console.log('Programs screen - isAdmin:', isAdmin, 'canView:', canViewPrograms, 'canCreate:', canCreatePrograms,
+  console.log('Programs screen - isAdmin:', isAdmin, 'canCreate:', canCreatePrograms,
     'override:', clinician?.override_can_create_programs,
     'tierLoaded:', !!clinicianTier);
 
@@ -102,7 +100,7 @@ export default function ProgramsScreen() {
         return [];
       }
     },
-    enabled: hasAccess,
+    enabled: true,
   });
 
   const selectedPatient = useMemo(() => {
@@ -225,21 +223,6 @@ export default function ProgramsScreen() {
 
   const keyExtractor = useCallback((item: ExerciseProgram) => item.id, []);
 
-  if (!hasAccess) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Programs 計劃</Text>
-        </View>
-        <View style={styles.emptyContainer}>
-          <ClipboardList size={48} color={Colors.borderLight} />
-          <Text style={styles.emptyText}>No access to programs</Text>
-          <Text style={styles.emptyTextZh}>無權限查看計劃</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -323,7 +306,7 @@ export default function ProgramsScreen() {
         />
       )}
 
-      {(isAdmin || canCreatePrograms) && selectedPatientId && (
+      {canCreatePrograms && selectedPatientId && (
         <TouchableOpacity
           style={[styles.fab, { bottom: 24 }]}
           onPress={() => {
