@@ -91,7 +91,7 @@ export default function ProgramsScreen() {
       }
       return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
     },
-    enabled: canViewPrograms,
+    enabled: isAdmin || canViewPrograms,
   });
 
   const selectedPatient = useMemo(() => {
@@ -214,7 +214,7 @@ export default function ProgramsScreen() {
 
   const keyExtractor = useCallback((item: ExerciseProgram) => item.id, []);
 
-  if (!canViewPrograms) {
+  if (!isAdmin && !canViewPrograms) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
@@ -312,7 +312,7 @@ export default function ProgramsScreen() {
         />
       )}
 
-      {canCreatePrograms && selectedPatientId && (
+      {(isAdmin || canCreatePrograms) && selectedPatientId && (
         <TouchableOpacity
           style={[styles.fab, { bottom: 24 }]}
           onPress={() => {
