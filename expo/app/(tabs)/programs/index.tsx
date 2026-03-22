@@ -226,12 +226,6 @@ export default function ProgramsScreen() {
         </Text>
       </View>
 
-      <View style={{ backgroundColor: '#FFE0E0', padding: 10, margin: 10, borderRadius: 8 }}>
-        <Text style={{ fontSize: 11, color: '#CC0000' }}>
-          DEBUG: isAdmin={String(isAdmin)} | patientsCount={patientsQuery.data?.length ?? 'loading'} | status={patientsQuery.status} | fetchStatus={patientsQuery.fetchStatus}
-        </Text>
-
-      </View>
 
       <TouchableOpacity
         style={styles.patientSelector}
