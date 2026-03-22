@@ -67,7 +67,7 @@ export default function ProgramsScreen() {
   const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [showNewProgramModal, setShowNewProgramModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState<ExerciseProgram | null>(null);
-  const [rawDebug, setRawDebug] = useState('...');
+
 
   const canCreatePrograms = isAdmin || clinicianCan('create_programs');
 
@@ -84,12 +84,10 @@ export default function ProgramsScreen() {
       console.log('role:', role);
       console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
       try {
-        const testResult = await supabase.from('patients').select('id, patient_name').limit(3);
-        setRawDebug('testRows=' + (testResult.data?.length ?? 'null') + ' testErr=' + (testResult.error?.message || 'none'));
         let query = supabase
           .from('patients')
           .select('id, patient_name, patient_name_zh, access_code, is_frozen')
-          .eq('is_frozen', false)
+          .neq('is_frozen', true)
           .order('patient_name', { ascending: true });
 
         if (!isAdmin && clinician?.id) {
@@ -245,7 +243,7 @@ export default function ProgramsScreen() {
         <Text style={{ fontSize: 11, color: '#CC0000' }}>
           DEBUG: isAdmin={String(isAdmin)} | clinicianId={clinician?.id || 'null'} | patientsCount={patientsQuery.data?.length ?? 'loading'} | status={patientsQuery.status} | fetching={String(patientsQuery.isFetching)} | error={patientsQuery.error?.message || 'none'}
         </Text>
-        <Text style={{ fontSize: 11, color: '#0000CC' }}>{rawDebug}</Text>
+
       </View>
 
       <TouchableOpacity
