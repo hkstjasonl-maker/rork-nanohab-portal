@@ -238,6 +238,12 @@ export default function ProgramsScreen() {
         </Text>
       </View>
 
+      <View style={{ backgroundColor: '#FFE0E0', padding: 10, margin: 10, borderRadius: 8 }}>
+        <Text style={{ fontSize: 12, color: '#CC0000' }}>
+          DEBUG: isAdmin={String(isAdmin)} | clinicianId={clinician?.id || 'null'} | patientsCount={patientsQuery.data?.length ?? 'loading'} | patientsError={patientsQuery.error?.message || 'none'} | patientsStatus={patientsQuery.status}
+        </Text>
+      </View>
+
       <TouchableOpacity
         style={styles.patientSelector}
         onPress={() => setShowPatientPicker(true)}
