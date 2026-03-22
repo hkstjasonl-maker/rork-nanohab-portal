@@ -60,7 +60,7 @@ function getScheduleLabel(program: ExerciseProgram): string {
 
 export default function ProgramsScreen() {
   const insets = useSafeAreaInsets();
-  const { isAdmin, clinician, clinicianTier, clinicianCan, role } = useAuth();
+  const { isAdmin, clinician, clinicianTier, clinicianCan } = useAuth();
   console.log('ProgramsScreen render - isAdmin:', isAdmin, 'clinician:', clinician?.id);
   const queryClient = useQueryClient();
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
@@ -79,18 +79,18 @@ export default function ProgramsScreen() {
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('patients')
-          .select('id, patient_name, patient_name_zh, access_code, is_frozen')
-          .order('patient_name', { ascending: true });
+          .select('*', { count: 'exact' });
 
-        if (error) {
-          console.log('Program patients fetch error:', error);
-          return [];
-        }
-        return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
-      } catch (e) {
-        console.log('Program patients exception:', e);
+        return (data || []).map(p => ({
+          id: p.id,
+          patient_name: p.patient_name || 'Unknown',
+          patient_name_zh: p.patient_name_zh || '',
+          access_code: p.access_code || '',
+          is_frozen: p.is_frozen || false,
+        }));
+      } catch {
         return [];
       }
     },
@@ -228,7 +228,7 @@ export default function ProgramsScreen() {
 
       <View style={{ backgroundColor: '#FFE0E0', padding: 10, margin: 10, borderRadius: 8 }}>
         <Text style={{ fontSize: 11, color: '#CC0000' }}>
-          DEBUG: isAdmin={String(isAdmin)} | clinicianId={clinician?.id || 'null'} | patientsCount={patientsQuery.data?.length ?? 'loading'} | status={patientsQuery.status} | fetching={String(patientsQuery.isFetching)} | error={patientsQuery.error?.message || 'none'}
+          DEBUG: isAdmin={String(isAdmin)} | patientsCount={patientsQuery.data?.length ?? 'loading'} | status={patientsQuery.status} | fetchStatus={patientsQuery.fetchStatus}
         </Text>
 
       </View>
