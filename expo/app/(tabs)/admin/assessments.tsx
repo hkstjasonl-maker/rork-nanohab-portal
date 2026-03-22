@@ -34,6 +34,8 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
+const DEBUG_MODE = true;
+
 interface Assessment {
   id: string;
   name_en: string;
@@ -75,7 +77,7 @@ type TabType = 'library' | 'assigned';
 
 
 export default function AssessmentsScreen() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, clinicianCan, clinician } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -104,6 +106,14 @@ export default function AssessmentsScreen() {
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [assessmentSearch, setAssessmentSearch] = useState('');
 
+  const canAccessAssessments = isAdmin || clinicianCan('assign_assessments');
+
+  React.useEffect(() => {
+    if (!isAdmin) {
+      setActiveTab('assigned');
+    }
+  }, [isAdmin]);
+
   const assessmentsQuery = useQuery({
     queryKey: ['admin-assessments'],
     queryFn: async () => {
@@ -130,7 +140,7 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: isAdmin,
+    enabled: canAccessAssessments,
   });
 
   const assignedQuery = useQuery({
@@ -151,7 +161,7 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: isAdmin && activeTab === 'assigned',
+    enabled: canAccessAssessments && activeTab === 'assigned',
   });
 
   const assessmentLibraryQuery = useQuery({
@@ -173,18 +183,23 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: isAdmin,
+    enabled: canAccessAssessments,
   });
 
   const patientsQuery = useQuery({
     queryKey: ['assign-patients'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        let patientQuery = supabase
           .from('patients')
           .select('id, patient_name, access_code')
           .eq('is_frozen', false)
           .order('patient_name', { ascending: true });
+
+        if (!isAdmin && clinician?.id) {
+          patientQuery = patientQuery.eq('clinician_id', clinician.id);
+        }
+        const { data, error } = await patientQuery;
         if (error) throw error;
         return (data || []) as PatientPick[];
       } catch (e) {
@@ -192,7 +207,7 @@ export default function AssessmentsScreen() {
         return [];
       }
     },
-    enabled: isAdmin && assignModalVisible,
+    enabled: canAccessAssessments && assignModalVisible,
   });
 
   const filteredPatients = useMemo(() => {
@@ -384,11 +399,11 @@ export default function AssessmentsScreen() {
     );
   }, [deleteMutation]);
 
-  if (!isAdmin) {
+  if (!canAccessAssessments) {
     return (
       <View style={styles.centered}>
         <Shield size={48} color={Colors.textTertiary} />
-        <Text style={styles.noAccessText}>Admin access required</Text>
+        <Text style={styles.noAccessText}>Access required{'\n'}請聯繫管理員獲取評估權限</Text>
       </View>
     );
   }
@@ -417,13 +432,15 @@ export default function AssessmentsScreen() {
       </SafeAreaView>
 
       <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, isLibraryTab && styles.tabItemActive]}
-          onPress={() => { setActiveTab('library'); setSearch(''); }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, isLibraryTab && styles.tabTextActive]}>Library 評估庫</Text>
-        </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity
+            style={[styles.tabItem, isLibraryTab && styles.tabItemActive]}
+            onPress={() => { setActiveTab('library'); setSearch(''); }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, isLibraryTab && styles.tabTextActive]}>Library 評估庫</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.tabItem, isAssignedTab && styles.tabItemActive]}
           onPress={() => { setActiveTab('assigned'); setSearch(''); }}
@@ -432,6 +449,14 @@ export default function AssessmentsScreen() {
           <Text style={[styles.tabText, isAssignedTab && styles.tabTextActive]}>Assigned 已分配</Text>
         </TouchableOpacity>
       </View>
+
+      {DEBUG_MODE && (
+        <View style={{ backgroundColor: 'red', padding: 6 }}>
+          <Text style={{ color: 'white', fontSize: 11 }}>
+            [DEBUG] isAdmin: {String(isAdmin)} | canAssignAssessments: {String(clinicianCan('assign_assessments'))} | activeTab: {activeTab}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.searchContainer}>
         <Search size={18} color={Colors.textTertiary} />

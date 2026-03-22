@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient, ExerciseProgram, ProgramExercise, Exercise } from '@/types';
 
+const DEBUG_MODE = true;
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABELS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -79,9 +80,16 @@ export default function ProgramsScreen() {
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
       try {
-        const { data } = await supabase
+        let query = supabase
           .from('patients')
-          .select('*', { count: 'exact' });
+          .select('id, patient_name, patient_name_zh, access_code, is_frozen');
+
+        if (!isAdmin && clinician?.id) {
+          query = query.eq('clinician_id', clinician.id);
+        }
+
+        const { data, error } = await query.order('patient_name', { ascending: true });
+        if (error) throw error;
 
         return (data || []).map(p => ({
           id: p.id,
@@ -124,7 +132,7 @@ export default function ProgramsScreen() {
   });
 
   const programExercisesQuery = useQuery({
-    queryKey: ['program-exercises', selectedPatientId],
+    queryKey: ['program-exercises', selectedPatientId, programsQuery.data?.map(p => p.id).join(',') ?? ''],
     queryFn: async () => {
       if (!selectedPatientId || !programsQuery.data?.length) return {};
       const programIds = programsQuery.data.map((p) => p.id);
@@ -148,7 +156,7 @@ export default function ProgramsScreen() {
       });
       return grouped;
     },
-    enabled: !!selectedPatientId && (programsQuery.data?.length ?? 0) > 0,
+    enabled: !!selectedPatientId && !programsQuery.isLoading && !programsQuery.isFetching && (programsQuery.data?.length ?? 0) > 0,
   });
 
   const deleteProgramMutation = useMutation({
@@ -226,6 +234,18 @@ export default function ProgramsScreen() {
         </Text>
       </View>
 
+
+      {DEBUG_MODE && selectedPatientId && (
+        <View style={{ backgroundColor: 'red', padding: 8 }}>
+          <Text style={{ color: 'white', fontSize: 11 }}>
+            [DEBUG] Patient: {selectedPatientId?.slice(0,8)}{'\n'}
+            Programs loaded: {programsQuery.data?.length ?? 0} | Programs loading: {String(programsQuery.isLoading)}{'\n'}
+            Exercise groups: {Object.keys(programExercisesQuery.data ?? {}).length} | Ex loading: {String(programExercisesQuery.isLoading)}{'\n'}
+            Ex error: {programExercisesQuery.error ? String(programExercisesQuery.error) : 'none'}{'\n'}
+            Role: {isAdmin ? 'admin' : 'clinician'} | Clinician ID: {clinician?.id?.slice(0,8) ?? 'none'} | Patients: {patientsQuery.data?.length ?? 0}
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={styles.patientSelector}
