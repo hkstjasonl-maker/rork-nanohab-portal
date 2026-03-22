@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,15 +19,27 @@ import {
   Snowflake,
   Sun,
   BarChart3,
+  ClipboardList,
+  X,
+  Check,
 } from 'lucide-react-native';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient } from '@/types';
+
+interface AssessmentLibraryItem {
+  id: string;
+  name: string;
+  name_zh?: string;
+  category?: string;
+}
 
 export default function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { isAdmin, clinicianCan, clinician } = useAuth();
 
   const [name, setName] = useState('');
   const [_nameZh, setNameZh] = useState('');
@@ -39,6 +52,9 @@ export default function PatientDetailScreen() {
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [isFormDirty, setIsFormDirty] = useState(false);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [assessmentNotes, setAssessmentNotes] = useState('');
 
   const patientQuery = useQuery({
     queryKey: ['patient', id],
@@ -148,6 +164,52 @@ export default function PatientDetailScreen() {
     };
   }, []);
 
+  const canAssignAssessments = isAdmin || clinicianCan('assign_assessments');
+
+  const assessmentsQuery = useQuery({
+    queryKey: ['assessment_library'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('assessment_library')
+          .select('id, name, name_zh, category')
+          .order('name', { ascending: true });
+        if (error) {
+          console.log('Assessment library fetch error:', error);
+          return [];
+        }
+        return (data || []) as AssessmentLibraryItem[];
+      } catch (e) {
+        console.log('Assessment library exception:', e);
+        return [];
+      }
+    },
+    enabled: canAssignAssessments,
+  });
+
+  const assignAssessmentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAssessmentId || !id) throw new Error('Missing assessment or patient');
+      const { error } = await supabase.from('assessment_submissions').insert({
+        patient_id: id,
+        assessment_id: selectedAssessmentId,
+        status: 'pending',
+        assigned_at: new Date().toISOString(),
+        assigned_by_clinician_id: clinician?.id || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setShowAssessmentModal(false);
+      setSelectedAssessmentId(null);
+      setAssessmentNotes('');
+      Alert.alert('Success 成功', 'Assessment assigned successfully.\n評估已成功分配。');
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
   const patient = patientQuery.data;
 
   if (patientQuery.isLoading) {
@@ -253,6 +315,17 @@ export default function PatientDetailScreen() {
             <Text style={[styles.actionButtonText, { color: '#1B6B4A' }]}>View Dashboard 查看儀表板</Text>
           </TouchableOpacity>
 
+          {canAssignAssessments && (
+            <TouchableOpacity
+              style={styles.assessmentButton}
+              onPress={() => setShowAssessmentModal(true)}
+              activeOpacity={0.7}
+            >
+              <ClipboardList size={18} color="#6B4C9A" />
+              <Text style={[styles.actionButtonText, { color: '#6B4C9A' }]}>Assign Assessment 分配評估</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.actionButton, patient.is_frozen ? styles.unfreezeButton : styles.freezeButton]}
             onPress={handleFreeze}
@@ -275,6 +348,80 @@ export default function PatientDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={showAssessmentModal} animationType="slide" presentationStyle="pageSheet">
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => { setShowAssessmentModal(false); setSelectedAssessmentId(null); setAssessmentNotes(''); }}>
+              <X size={22} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Assign Assessment 分配評估</Text>
+            <TouchableOpacity
+              onPress={() => assignAssessmentMutation.mutate()}
+              disabled={!selectedAssessmentId || assignAssessmentMutation.isPending}
+              style={{ opacity: selectedAssessmentId ? 1 : 0.4 }}
+            >
+              {assignAssessmentMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : (
+                <Check size={22} color={Colors.accent} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.modalSectionTitle}>Select Assessment 選擇評估</Text>
+            {assessmentsQuery.isLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} style={{ marginVertical: 20 }} />
+            ) : (assessmentsQuery.data || []).length === 0 ? (
+              <Text style={styles.modalEmptyText}>No assessments available</Text>
+            ) : (
+              <View style={styles.assessmentList}>
+                {(assessmentsQuery.data || []).map((a) => (
+                  <TouchableOpacity
+                    key={a.id}
+                    style={[
+                      styles.assessmentOption,
+                      selectedAssessmentId === a.id && styles.assessmentOptionSelected,
+                    ]}
+                    onPress={() => setSelectedAssessmentId(a.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.assessmentOptionContent}>
+                      <Text style={[
+                        styles.assessmentOptionName,
+                        selectedAssessmentId === a.id && styles.assessmentOptionNameSelected,
+                      ]}>
+                        {a.name}{a.name_zh ? ` ${a.name_zh}` : ''}
+                      </Text>
+                      {a.category && (
+                        <Text style={styles.assessmentOptionCategory}>{a.category}</Text>
+                      )}
+                    </View>
+                    {selectedAssessmentId === a.id && (
+                      <Check size={18} color={Colors.accent} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={[styles.modalSectionTitle, { marginTop: 20 }]}>Notes 備註</Text>
+            <TextInput
+              style={styles.modalNotesInput}
+              value={assessmentNotes}
+              onChangeText={setAssessmentNotes}
+              placeholder="Optional notes 可選備註"
+              placeholderTextColor={Colors.textTertiary}
+              multiline
+              numberOfLines={3}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -454,5 +601,98 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 15,
     fontWeight: '600' as const,
+  },
+  assessmentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#6B4C9A14',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#F2F0ED',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+    backgroundColor: Colors.white,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    textAlign: 'center' as const,
+    marginVertical: 20,
+  },
+  assessmentList: {
+    gap: 8,
+  },
+  assessmentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+  },
+  assessmentOptionSelected: {
+    borderColor: Colors.accent,
+    backgroundColor: '#E07A3A08',
+  },
+  assessmentOptionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  assessmentOptionName: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: Colors.text,
+  },
+  assessmentOptionNameSelected: {
+    fontWeight: '600' as const,
+    color: Colors.accent,
+  },
+  assessmentOptionCategory: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+  },
+  modalNotesInput: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });
