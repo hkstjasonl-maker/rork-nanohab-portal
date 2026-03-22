@@ -47,16 +47,17 @@ interface Assessment {
 interface AssignedAssessment {
   id: string;
   patient_id: string;
-  assessment_name: string;
-  timepoint: string;
-  total_score?: number;
-  administered_date?: string;
-  completion_method?: string;
-  notes?: string;
+  assessment_id: string;
+  assigned_by?: string | null;
+  assigned_at?: string;
+  scheduled_date?: string | null;
+  status?: string;
+  language?: string | null;
+  total_score?: number | null;
+  notes?: string | null;
   created_at?: string;
   patients?: {
     patient_name: string;
-    research_participant_code?: string;
   } | null;
 }
 
@@ -68,23 +69,8 @@ interface PatientPick {
 
 type TabType = 'library' | 'assigned';
 
-const TIMEPOINTS = ['baseline', 'week4', 'endpoint'] as const;
 const ASSESSMENT_NAMES = ['EAT-10', 'FOIS', 'SWAL-QOL', 'FDA-2', 'DHI', 'D-TOMs', 'COAST', 'SUS', 'Other'];
-const _COMPLETION_METHODS = ['app_wizard', 'app_checklist', 'paper', 'interview'];
 
-function getTimepointColor(tp: string) {
-  if (tp === 'baseline') return Colors.success;
-  if (tp === 'week4') return Colors.warning;
-  if (tp === 'endpoint') return Colors.danger;
-  return Colors.textTertiary;
-}
-
-function getTimepointBgColor(tp: string) {
-  if (tp === 'baseline') return Colors.successLight;
-  if (tp === 'week4') return Colors.warningLight;
-  if (tp === 'endpoint') return Colors.dangerLight;
-  return Colors.surfaceSecondary;
-}
 
 export default function AssessmentsScreen() {
   const { isAdmin } = useAuth();
@@ -107,8 +93,8 @@ export default function AssessmentsScreen() {
   const [description, setDescription] = useState('');
 
   const [assignPatientId, setAssignPatientId] = useState<string | null>(null);
-  const [assignTimepoint, setAssignTimepoint] = useState<string>('baseline');
-  const [assignDate, setAssignDate] = useState(new Date().toISOString().split('T')[0]);
+
+
   const [assignNotes, setAssignNotes] = useState('');
   const [assignAssessmentName, setAssignAssessmentName] = useState<string>('EAT-10');
   const [showPatientPicker, setShowPatientPicker] = useState(false);
@@ -149,9 +135,9 @@ export default function AssessmentsScreen() {
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('research_assessments')
-          .select('*, patients(patient_name, research_participant_code)')
-          .order('administered_date', { ascending: false });
+          .from('assessment_submissions')
+          .select('*, patients(patient_name)')
+          .order('assigned_at', { ascending: false });
         if (error) {
           console.log('Assigned assessments error:', error);
           return [];
@@ -213,10 +199,9 @@ export default function AssessmentsScreen() {
     if (!search.trim()) return assignedQuery.data;
     const s = search.toLowerCase();
     return assignedQuery.data.filter(a =>
-      a.assessment_name?.toLowerCase().includes(s) ||
+      a.assessment_id?.toLowerCase().includes(s) ||
       a.patients?.patient_name?.toLowerCase().includes(s) ||
-      a.patients?.research_participant_code?.toLowerCase().includes(s) ||
-      a.timepoint?.toLowerCase().includes(s)
+      a.status?.toLowerCase().includes(s)
     );
   }, [assignedQuery.data, search]);
 
@@ -237,8 +222,8 @@ export default function AssessmentsScreen() {
     setAssigningAssessment(a);
     setAssignFromTab(false);
     setAssignPatientId(null);
-    setAssignTimepoint('baseline');
-    setAssignDate(new Date().toISOString().split('T')[0]);
+
+
     setAssignNotes('');
     setAssignAssessmentName(a.name_en || 'EAT-10');
     setPatientSearch('');
@@ -249,8 +234,8 @@ export default function AssessmentsScreen() {
     setAssigningAssessment(null);
     setAssignFromTab(true);
     setAssignPatientId(null);
-    setAssignTimepoint('baseline');
-    setAssignDate(new Date().toISOString().split('T')[0]);
+
+
     setAssignNotes('');
     setAssignAssessmentName('EAT-10');
     setPatientSearch('');
@@ -287,12 +272,13 @@ export default function AssessmentsScreen() {
       const assessmentName = assignFromTab ? assignAssessmentName : (assigningAssessment?.name_en || assignAssessmentName);
       if (!assessmentName) throw new Error('Please select an assessment');
 
-      const { error } = await supabase.from('research_assessments').insert({
+      const { error } = await supabase.from('assessment_submissions').insert({
         patient_id: assignPatientId,
-        assessment_name: assessmentName,
-        timepoint: assignTimepoint,
-        administered_date: assignDate,
-        completion_method: 'paper',
+        assessment_id: assessmentName,
+        assigned_by: null,
+        assigned_at: new Date().toISOString(),
+        status: 'pending',
+        language: 'en',
         notes: assignNotes.trim() || null,
       });
       if (error) throw error;
@@ -311,7 +297,7 @@ export default function AssessmentsScreen() {
 
   const deleteAssignedMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('research_assessments').delete().eq('id', id);
+      const { error } = await supabase.from('assessment_submissions').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -327,7 +313,7 @@ export default function AssessmentsScreen() {
   const handleDeleteAssigned = useCallback((item: AssignedAssessment) => {
     Alert.alert(
       'Delete Assessment 刪除評估',
-      `Remove "${item.assessment_name}" for ${item.patients?.patient_name || 'this patient'}?\n確定要刪除此評估嗎？`,
+      `Remove "${item.assessment_id}" for ${item.patients?.patient_name || 'this patient'}?\n確定要刪除此評估嗎？`,
       [
         { text: 'Cancel 取消', style: 'cancel' },
         { text: 'Delete 刪除', style: 'destructive', onPress: () => deleteAssignedMutation.mutate(item.id) },
@@ -428,7 +414,7 @@ export default function AssessmentsScreen() {
         <View style={styles.infoBanner}>
           <Info size={16} color={Colors.info} />
           <Text style={styles.infoBannerText}>
-            Assessments assigned here are visible in the Research tab. Patient app integration coming soon.{'\n'}此處分配的評估可在研究標籤中查看。患者應用整合即將推出。
+            Assessments assigned here will be visible to patients. Research assessments remain in the Research tab.{'\n'}此處分配的評估將對患者可見。研究評估仍在研究標籤中。
           </Text>
         </View>
       )}
@@ -505,9 +491,7 @@ export default function AssessmentsScreen() {
                   <View style={styles.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardName}>{item.patients?.patient_name || 'Unknown Patient'}</Text>
-                      {item.patients?.research_participant_code && (
-                        <Text style={styles.participantCode}>{item.patients.research_participant_code}</Text>
-                      )}
+
                     </View>
                     <TouchableOpacity onPress={() => handleDeleteAssigned(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Trash2 size={16} color={Colors.danger} />
@@ -516,12 +500,12 @@ export default function AssessmentsScreen() {
 
                   <View style={styles.assignedMeta}>
                     <View style={styles.assessmentNameBadge}>
-                      <Text style={styles.assessmentNameText}>{item.assessment_name}</Text>
+                      <Text style={styles.assessmentNameText}>{item.assessment_id}</Text>
                     </View>
-                    <View style={[styles.timepointBadge, { backgroundColor: getTimepointBgColor(item.timepoint) }]}>
-                      <View style={[styles.timepointDotSmall, { backgroundColor: getTimepointColor(item.timepoint) }]} />
-                      <Text style={[styles.timepointBadgeText, { color: getTimepointColor(item.timepoint) }]}>
-                        {item.timepoint}
+                    <View style={[styles.timepointBadge, { backgroundColor: item.status === 'completed' ? Colors.successLight : item.status === 'pending' ? Colors.warningLight : Colors.surfaceSecondary }]}>
+                      <View style={[styles.timepointDotSmall, { backgroundColor: item.status === 'completed' ? Colors.success : item.status === 'pending' ? Colors.warning : Colors.textTertiary }]} />
+                      <Text style={[styles.timepointBadgeText, { color: item.status === 'completed' ? Colors.success : item.status === 'pending' ? Colors.warning : Colors.textTertiary }]}>
+                        {item.status || 'unknown'}
                       </Text>
                     </View>
                   </View>
@@ -530,13 +514,8 @@ export default function AssessmentsScreen() {
                     {item.total_score != null && (
                       <Text style={styles.scoreText}>Score: {item.total_score}</Text>
                     )}
-                    {item.administered_date && (
-                      <Text style={styles.dateText}>{item.administered_date}</Text>
-                    )}
-                    {item.completion_method && (
-                      <View style={styles.methodBadge}>
-                        <Text style={styles.methodBadgeText}>{item.completion_method}</Text>
-                      </View>
+                    {item.assigned_at && (
+                      <Text style={styles.dateText}>{item.assigned_at.split('T')[0]}</Text>
                     )}
                   </View>
 
@@ -642,33 +621,7 @@ export default function AssessmentsScreen() {
                 <ChevronDown size={16} color={Colors.textSecondary} />
               </TouchableOpacity>
 
-              <Text style={styles.fieldLabel}>Timepoint 時間點 *</Text>
-              <View style={styles.timepointRow}>
-                {TIMEPOINTS.map(tp => (
-                  <TouchableOpacity
-                    key={tp}
-                    style={[styles.timepointChip, assignTimepoint === tp && styles.timepointChipActive]}
-                    onPress={() => setAssignTimepoint(tp)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.timepointDot, {
-                      backgroundColor: tp === 'baseline' ? Colors.success : tp === 'week4' ? Colors.warning : Colors.danger,
-                    }]} />
-                    <Text style={[styles.timepointText, assignTimepoint === tp && styles.timepointTextActive]}>
-                      {tp}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
 
-              <Text style={styles.fieldLabel}>Date 日期</Text>
-              <TextInput
-                style={styles.input}
-                value={assignDate}
-                onChangeText={setAssignDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textTertiary}
-              />
 
               <Text style={styles.fieldLabel}>Notes 備註</Text>
               <TextInput
