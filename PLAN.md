@@ -75,6 +75,15 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Therapist Settings**: Per-patient therapist name/photo management — list all patients with current therapist_name_en/zh and photo/cartoon thumbnails; tap to edit modal with URL inputs and preview
 - **Managing Org**: Two-section screen — "Default Org Settings" form (reads/writes app_config table for default org name/logo) with "Apply to All" bulk update; "Per-Patient Overrides" list with search, tap to edit individual patient's managing_org fields
 
+### Research (Admin-only)
+- Conditionally visible Research tab (FlaskConical icon) — only shown when `isAdmin === true`
+- Four-segment top tab bar: Participants, Sessions, Assessments, Export
+- Dark green (#1B6B4A) accent color to distinguish from main admin hub
+- **Participants**: List all patients with research enrollment status (enrolled/not enrolled badges), cohort badges (stroke/npc_active/npc_post), participant codes. Tap to edit: toggle is_research_participant, cohort picker, participant code, consent/baseline/endpoint dates.
+- **Session Logs**: Scrollable list from `research_session_logs` joined with patients. Filter by patient picker (research participants only) and date range (7/14/30/90 days/All). Shows participant code, date, exercise name, prescribed vs completed sets×reps, completion rate %, duration, self rating, mirror mode, video recorded badges.
+- **Assessments**: List from `research_assessments` with timepoint color indicators (baseline=green, week4=yellow, endpoint=red), assessment name badges, scores, dates, completion methods. Add assessment form with patient picker, assessment name dropdown (EAT-10, FOIS, SWAL-QOL, etc.), timepoint picker, score, date, completion method, notes.
+- **Data Export**: Three export buttons for CSV export — Session Logs (`research_export_sessions` view), Assessments (`research_export_assessments` view), Adherence Summary (`research_export_adherence_summary` view). Generates CSV, shares via expo-sharing on native or downloads on web. Shows preview of first 3 rows after export.
+
 ### Settings
 - Profile info display
 - Logout button
@@ -86,7 +95,7 @@ A professional clinical exercise prescription management portal for speech-langu
 - **Color scheme**: Clean white/light grey backgrounds with a warm orange accent (#E07A3A), dark text for readability
 - **Style**: Professional medical aesthetic — think clinical portal meets modern iOS design
 - **Cards**: Rounded white cards with subtle shadows, clear visual hierarchy
-- **Navigation**: Tab bar with Home, Patients, Exercises, Programs, Market, Admin (admin-only), and Settings tabs
+- **Navigation**: Tab bar with Home, Patients, Exercises, Programs, Market, Research (admin-only), Admin (admin-only), and Settings tabs
 - **Typography**: Clean, legible fonts with bilingual support
 - **Anti-screenshot**: Screen capture prevention enabled app-wide
 
@@ -121,6 +130,10 @@ A professional clinical exercise prescription management portal for speech-langu
 25. **Reinforcement Audio** — Full CRUD for reinforcement audio library with multilingual YouTube IDs and audio URLs
 26. **Therapist Settings** — Patient list with therapist name/photo per patient, edit modal for therapist_name_en/zh + photo/cartoon URLs
 27. **Managing Org** — Default org config section + per-patient org override list with edit modal and bulk apply
+28. **Research Participants** — All patients with research enrollment status, cohort badges, participant codes; edit modal for research fields
+29. **Research Session Logs** — Filterable list of research session data with completion metrics and badges
+30. **Research Assessments** — List + add form for research assessments with timepoint indicators and scores
+31. **Research Data Export** — Three CSV export buttons with preview for session logs, assessments, and adherence summary
 
 ---
 

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store, Shield } from 'lucide-react-native';
+import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store, Shield, FlaskConical } from 'lucide-react-native';
 import React from 'react';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -56,6 +56,14 @@ export default function TabLayout() {
         options={{
           title: 'Market',
           tabBarIcon: ({ color, size }) => <Store size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="research"
+        options={{
+          title: 'Research',
+          tabBarIcon: ({ color, size }) => <FlaskConical size={size} color={color} />,
+          href: isAdmin ? '/research' : null,
         }}
       />
       <Tabs.Screen
