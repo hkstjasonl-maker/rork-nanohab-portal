@@ -78,32 +78,19 @@ export default function ProgramsScreen() {
   const patientsQuery = useQuery({
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
-      console.log('=== PROGRAMS DEBUG ===');
-      console.log('isAdmin:', isAdmin);
-      console.log('clinician:', clinician?.id);
-      console.log('role:', role);
-      console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from('patients')
           .select('id, patient_name, patient_name_zh, access_code, is_frozen')
-          .neq('is_frozen', true)
           .order('patient_name', { ascending: true });
 
-        if (!isAdmin && clinician?.id) {
-          query = query.eq('clinician_id', clinician.id);
-        }
-
-        const { data, error } = await query;
-        console.log('Patients result:', data?.length, 'error:', error);
         if (error) {
           console.log('Program patients fetch error:', error);
           return [];
         }
-        console.log('Program patients fetched:', data?.length);
         return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
       } catch (e) {
-        console.log('Program patients query exception:', e);
+        console.log('Program patients exception:', e);
         return [];
       }
     },
