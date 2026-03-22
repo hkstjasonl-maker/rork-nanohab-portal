@@ -27,6 +27,8 @@ import {
   UserPlus,
   Check,
   ChevronDown,
+  Info,
+  Trash2,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -42,25 +44,62 @@ interface Assessment {
   created_at?: string;
 }
 
+interface AssignedAssessment {
+  id: string;
+  patient_id: string;
+  assessment_name: string;
+  timepoint: string;
+  total_score?: number;
+  administered_date?: string;
+  completion_method?: string;
+  notes?: string;
+  created_at?: string;
+  patients?: {
+    patient_name: string;
+    research_participant_code?: string;
+  } | null;
+}
+
 interface PatientPick {
   id: string;
   patient_name: string;
   access_code: string;
 }
 
+type TabType = 'library' | 'assigned';
+
 const TIMEPOINTS = ['baseline', 'week4', 'endpoint'] as const;
-const _ASSESSMENT_NAMES = ['EAT-10', 'FOIS', 'SWAL-QOL', 'FDA-2', 'DHI', 'D-TOMs', 'COAST', 'SUS', 'Other'];
+const ASSESSMENT_NAMES = ['EAT-10', 'FOIS', 'SWAL-QOL', 'FDA-2', 'DHI', 'D-TOMs', 'COAST', 'SUS', 'Other'];
+const _COMPLETION_METHODS = ['app_wizard', 'app_checklist', 'paper', 'interview'];
+
+function getTimepointColor(tp: string) {
+  if (tp === 'baseline') return Colors.success;
+  if (tp === 'week4') return Colors.warning;
+  if (tp === 'endpoint') return Colors.danger;
+  return Colors.textTertiary;
+}
+
+function getTimepointBgColor(tp: string) {
+  if (tp === 'baseline') return Colors.successLight;
+  if (tp === 'week4') return Colors.warningLight;
+  if (tp === 'endpoint') return Colors.dangerLight;
+  return Colors.surfaceSecondary;
+}
 
 export default function AssessmentsScreen() {
   const { isAdmin } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  const [activeTab, setActiveTab] = useState<TabType>('library');
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tableExists, setTableExists] = useState(true);
+
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [assigningAssessment, setAssigningAssessment] = useState<Assessment | null>(null);
+  const [assignFromTab, setAssignFromTab] = useState(false);
 
   const [nameEn, setNameEn] = useState('');
   const [nameZh, setNameZh] = useState('');
@@ -71,8 +110,10 @@ export default function AssessmentsScreen() {
   const [assignTimepoint, setAssignTimepoint] = useState<string>('baseline');
   const [assignDate, setAssignDate] = useState(new Date().toISOString().split('T')[0]);
   const [assignNotes, setAssignNotes] = useState('');
+  const [assignAssessmentName, setAssignAssessmentName] = useState<string>('EAT-10');
   const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
+  const [showAssessmentNamePicker, setShowAssessmentNamePicker] = useState(false);
 
   const assessmentsQuery = useQuery({
     queryKey: ['admin-assessments'],
@@ -101,6 +142,27 @@ export default function AssessmentsScreen() {
       }
     },
     enabled: isAdmin,
+  });
+
+  const assignedQuery = useQuery({
+    queryKey: ['admin-assigned-assessments'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('research_assessments')
+          .select('*, patients(patient_name, research_participant_code)')
+          .order('administered_date', { ascending: false });
+        if (error) {
+          console.log('Assigned assessments error:', error);
+          return [];
+        }
+        return (data || []) as AssignedAssessment[];
+      } catch (e) {
+        console.log('Assigned assessments exception:', e);
+        return [];
+      }
+    },
+    enabled: isAdmin && activeTab === 'assigned',
   });
 
   const patientsQuery = useQuery({
@@ -135,7 +197,7 @@ export default function AssessmentsScreen() {
     return patientsQuery.data?.find(p => p.id === assignPatientId) || null;
   }, [patientsQuery.data, assignPatientId]);
 
-  const filtered = useMemo(() => {
+  const filteredLibrary = useMemo(() => {
     if (!assessmentsQuery.data) return [];
     if (!search.trim()) return assessmentsQuery.data;
     const s = search.toLowerCase();
@@ -145,6 +207,18 @@ export default function AssessmentsScreen() {
       a.category?.toLowerCase().includes(s)
     );
   }, [assessmentsQuery.data, search]);
+
+  const filteredAssigned = useMemo(() => {
+    if (!assignedQuery.data) return [];
+    if (!search.trim()) return assignedQuery.data;
+    const s = search.toLowerCase();
+    return assignedQuery.data.filter(a =>
+      a.assessment_name?.toLowerCase().includes(s) ||
+      a.patients?.patient_name?.toLowerCase().includes(s) ||
+      a.patients?.research_participant_code?.toLowerCase().includes(s) ||
+      a.timepoint?.toLowerCase().includes(s)
+    );
+  }, [assignedQuery.data, search]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -159,12 +233,26 @@ export default function AssessmentsScreen() {
     setModalVisible(true);
   }, []);
 
-  const openAssign = useCallback((a: Assessment) => {
+  const openAssignFromLibrary = useCallback((a: Assessment) => {
     setAssigningAssessment(a);
+    setAssignFromTab(false);
     setAssignPatientId(null);
     setAssignTimepoint('baseline');
     setAssignDate(new Date().toISOString().split('T')[0]);
     setAssignNotes('');
+    setAssignAssessmentName(a.name_en || 'EAT-10');
+    setPatientSearch('');
+    setAssignModalVisible(true);
+  }, []);
+
+  const openAssignNew = useCallback(() => {
+    setAssigningAssessment(null);
+    setAssignFromTab(true);
+    setAssignPatientId(null);
+    setAssignTimepoint('baseline');
+    setAssignDate(new Date().toISOString().split('T')[0]);
+    setAssignNotes('');
+    setAssignAssessmentName('EAT-10');
     setPatientSearch('');
     setAssignModalVisible(true);
   }, []);
@@ -196,11 +284,12 @@ export default function AssessmentsScreen() {
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!assignPatientId) throw new Error('Please select a patient');
-      if (!assigningAssessment) throw new Error('No assessment selected');
+      const assessmentName = assignFromTab ? assignAssessmentName : (assigningAssessment?.name_en || assignAssessmentName);
+      if (!assessmentName) throw new Error('Please select an assessment');
 
       const { error } = await supabase.from('research_assessments').insert({
         patient_id: assignPatientId,
-        assessment_name: assigningAssessment.name_en,
+        assessment_name: assessmentName,
         timepoint: assignTimepoint,
         administered_date: assignDate,
         completion_method: 'paper',
@@ -211,6 +300,7 @@ export default function AssessmentsScreen() {
     onSuccess: () => {
       setAssignModalVisible(false);
       Alert.alert('Assigned 已指派', 'Assessment assigned to patient successfully.\n已成功指派評估給患者。');
+      void queryClient.invalidateQueries({ queryKey: ['admin-assigned-assessments'] });
       void queryClient.invalidateQueries({ queryKey: ['research-assessments'] });
     },
     onError: (error: Error) => {
@@ -218,6 +308,56 @@ export default function AssessmentsScreen() {
       Alert.alert('Error 錯誤', error.message);
     },
   });
+
+  const deleteAssignedMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('research_assessments').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-assigned-assessments'] });
+      void queryClient.invalidateQueries({ queryKey: ['research-assessments'] });
+    },
+    onError: (error: Error) => {
+      console.log('Delete assigned assessment error:', error);
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  const handleDeleteAssigned = useCallback((item: AssignedAssessment) => {
+    Alert.alert(
+      'Delete Assessment 刪除評估',
+      `Remove "${item.assessment_name}" for ${item.patients?.patient_name || 'this patient'}?\n確定要刪除此評估嗎？`,
+      [
+        { text: 'Cancel 取消', style: 'cancel' },
+        { text: 'Delete 刪除', style: 'destructive', onPress: () => deleteAssignedMutation.mutate(item.id) },
+      ]
+    );
+  }, [deleteAssignedMutation]);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('assessment_library').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-assessments'] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const handleDeleteLibrary = useCallback((a: Assessment) => {
+    Alert.alert(
+      'Delete Assessment 刪除評估',
+      `Delete "${a.name_en}"?\n確定要刪除 "${a.name_en}" 嗎？`,
+      [
+        { text: 'Cancel 取消', style: 'cancel' },
+        { text: 'Delete 刪除', style: 'destructive', onPress: () => deleteMutation.mutate(a.id) },
+      ]
+    );
+  }, [deleteMutation]);
 
   if (!isAdmin) {
     return (
@@ -228,39 +368,14 @@ export default function AssessmentsScreen() {
     );
   }
 
-  if (!tableExists) {
-    return (
-      <View style={styles.container}>
-        <SafeAreaView edges={['top']} style={styles.safeTop}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <ChevronLeft size={24} color={Colors.white} />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Assessments</Text>
-              <Text style={styles.headerSubtitle}>評估庫</Text>
-            </View>
-          </View>
-        </SafeAreaView>
-        <View style={styles.placeholderCenter}>
-          <ClipboardCheck size={56} color={Colors.textTertiary} />
-          <Text style={styles.placeholderTitle}>Assessment Library Not Configured</Text>
-          <Text style={styles.placeholderSubtitle}>評估庫尚未配置</Text>
-          <Text style={styles.placeholderDesc}>
-            You can still add assessments via the Research tab.
-            {'\n'}您仍可透過研究分頁新增評估。
-          </Text>
-          <TouchableOpacity
-            style={styles.goResearchBtn}
-            onPress={() => router.push('/(tabs)/research')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.goResearchText}>Go to Research 前往研究</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  const isLibraryTab = activeTab === 'library';
+  const isAssignedTab = activeTab === 'assigned';
+  const showLibraryPlaceholder = !tableExists && isLibraryTab;
+  const currentLoading = isLibraryTab ? assessmentsQuery.isLoading : assignedQuery.isLoading;
+  const currentFetching = isLibraryTab ? assessmentsQuery.isFetching : assignedQuery.isFetching;
+  const handleRefresh = isLibraryTab
+    ? () => void assessmentsQuery.refetch()
+    : () => void assignedQuery.refetch();
 
   return (
     <View style={styles.container}>
@@ -271,16 +386,33 @@ export default function AssessmentsScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Assessments</Text>
-            <Text style={styles.headerSubtitle}>評估庫</Text>
+            <Text style={styles.headerSubtitle}>評估</Text>
           </View>
         </View>
       </SafeAreaView>
+
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabItem, isLibraryTab && styles.tabItemActive]}
+          onPress={() => { setActiveTab('library'); setSearch(''); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, isLibraryTab && styles.tabTextActive]}>Library 評估庫</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, isAssignedTab && styles.tabItemActive]}
+          onPress={() => { setActiveTab('assigned'); setSearch(''); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, isAssignedTab && styles.tabTextActive]}>Assigned 已分配</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.searchContainer}>
         <Search size={18} color={Colors.textTertiary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search assessments..."
+          placeholder={isLibraryTab ? "Search assessments..." : "Search by patient, assessment..."}
           placeholderTextColor={Colors.textTertiary}
           value={search}
           onChangeText={setSearch}
@@ -292,49 +424,135 @@ export default function AssessmentsScreen() {
         )}
       </View>
 
+      {isAssignedTab && (
+        <View style={styles.infoBanner}>
+          <Info size={16} color={Colors.info} />
+          <Text style={styles.infoBannerText}>
+            Assessments assigned here are visible in the Research tab. Patient app integration coming soon.{'\n'}此處分配的評估可在研究標籤中查看。患者應用整合即將推出。
+          </Text>
+        </View>
+      )}
+
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={assessmentsQuery.isFetching} onRefresh={() => void assessmentsQuery.refetch()} tintColor={Colors.accent} />
+          <RefreshControl refreshing={currentFetching} onRefresh={handleRefresh} tintColor={Colors.accent} />
         }
         showsVerticalScrollIndicator={false}
       >
-        {assessmentsQuery.isLoading ? (
+        {currentLoading ? (
           <ActivityIndicator size="large" color={Colors.accent} style={{ marginTop: 40 }} />
-        ) : filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No assessments found</Text>
-        ) : (
-          filtered.map(a => (
-            <View key={a.id} style={styles.card}>
-              <TouchableOpacity onPress={() => openEdit(a)} activeOpacity={0.7} style={styles.cardTouchable}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardName}>{a.name_en}</Text>
-                    {a.name_zh && <Text style={styles.cardNameZh}>{a.name_zh}</Text>}
-                  </View>
-                  {a.category && (
-                    <View style={styles.catBadge}>
-                      <Text style={styles.catBadgeText}>{a.category}</Text>
+        ) : showLibraryPlaceholder ? (
+          <View style={styles.placeholderCenter}>
+            <ClipboardCheck size={56} color={Colors.textTertiary} />
+            <Text style={styles.placeholderTitle}>Assessment Library Not Configured</Text>
+            <Text style={styles.placeholderSubtitle}>評估庫尚未配置</Text>
+            <Text style={styles.placeholderDesc}>
+              You can still add assessments via the Research tab.{'\n'}您仍可透過研究分頁新增評估。
+            </Text>
+            <TouchableOpacity
+              style={styles.goResearchBtn}
+              onPress={() => router.push('/(tabs)/research')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.goResearchText}>Go to Research 前往研究</Text>
+            </TouchableOpacity>
+          </View>
+        ) : isLibraryTab ? (
+          filteredLibrary.length === 0 ? (
+            <Text style={styles.emptyText}>No assessments found</Text>
+          ) : (
+            filteredLibrary.map(a => (
+              <View key={a.id} style={styles.card}>
+                <TouchableOpacity onPress={() => openEdit(a)} activeOpacity={0.7} style={styles.cardTouchable}>
+                  <View style={styles.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardName}>{a.name_en}</Text>
+                      {a.name_zh && <Text style={styles.cardNameZh}>{a.name_zh}</Text>}
                     </View>
-                  )}
+                    <View style={styles.cardActions}>
+                      {a.category && (
+                        <View style={styles.catBadge}>
+                          <Text style={styles.catBadgeText}>{a.category}</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity onPress={() => handleDeleteLibrary(a)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Trash2 size={16} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {a.description && <Text style={styles.cardDesc} numberOfLines={2}>{a.description}</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.assignBtn}
+                  onPress={() => openAssignFromLibrary(a)}
+                  activeOpacity={0.7}
+                >
+                  <UserPlus size={14} color={Colors.accent} />
+                  <Text style={styles.assignBtnText}>Assign 指派</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )
+        ) : (
+          filteredAssigned.length === 0 ? (
+            <Text style={styles.emptyText}>No assigned assessments found{'\n'}尚無已分配的評估</Text>
+          ) : (
+            filteredAssigned.map(item => (
+              <View key={item.id} style={styles.card}>
+                <View style={styles.cardTouchable}>
+                  <View style={styles.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardName}>{item.patients?.patient_name || 'Unknown Patient'}</Text>
+                      {item.patients?.research_participant_code && (
+                        <Text style={styles.participantCode}>{item.patients.research_participant_code}</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeleteAssigned(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Trash2 size={16} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.assignedMeta}>
+                    <View style={styles.assessmentNameBadge}>
+                      <Text style={styles.assessmentNameText}>{item.assessment_name}</Text>
+                    </View>
+                    <View style={[styles.timepointBadge, { backgroundColor: getTimepointBgColor(item.timepoint) }]}>
+                      <View style={[styles.timepointDotSmall, { backgroundColor: getTimepointColor(item.timepoint) }]} />
+                      <Text style={[styles.timepointBadgeText, { color: getTimepointColor(item.timepoint) }]}>
+                        {item.timepoint}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.assignedDetails}>
+                    {item.total_score != null && (
+                      <Text style={styles.scoreText}>Score: {item.total_score}</Text>
+                    )}
+                    {item.administered_date && (
+                      <Text style={styles.dateText}>{item.administered_date}</Text>
+                    )}
+                    {item.completion_method && (
+                      <View style={styles.methodBadge}>
+                        <Text style={styles.methodBadgeText}>{item.completion_method}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {item.notes && <Text style={styles.notesText} numberOfLines={2}>{item.notes}</Text>}
                 </View>
-                {a.description && <Text style={styles.cardDesc} numberOfLines={2}>{a.description}</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.assignBtn}
-                onPress={() => openAssign(a)}
-                activeOpacity={0.7}
-              >
-                <UserPlus size={14} color={Colors.accent} />
-                <Text style={styles.assignBtnText}>Assign 指派</Text>
-              </TouchableOpacity>
-            </View>
-          ))
+              </View>
+            ))
+          )
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={openNew} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={isLibraryTab ? openNew : openAssignNew}
+        activeOpacity={0.8}
+      >
         <Plus size={24} color={Colors.white} />
       </TouchableOpacity>
 
@@ -391,11 +609,25 @@ export default function AssessmentsScreen() {
             </View>
 
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              {assigningAssessment && (
+              {assigningAssessment && !assignFromTab && (
                 <View style={styles.assignBanner}>
                   <ClipboardCheck size={18} color={Colors.accent} />
                   <Text style={styles.assignBannerText}>{assigningAssessment.name_en}</Text>
                 </View>
+              )}
+
+              {assignFromTab && (
+                <>
+                  <Text style={styles.fieldLabel}>Assessment Name 評估名稱 *</Text>
+                  <TouchableOpacity
+                    style={styles.pickerBtn}
+                    onPress={() => setShowAssessmentNamePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.pickerBtnText}>{assignAssessmentName}</Text>
+                    <ChevronDown size={16} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </>
               )}
 
               <Text style={styles.fieldLabel}>Patient 患者 *</Text>
@@ -487,6 +719,28 @@ export default function AssessmentsScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
+
+        <Modal visible={showAssessmentNamePicker} animationType="fade" transparent>
+          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowAssessmentNamePicker(false)}>
+            <View style={styles.pickerModal}>
+              <Text style={styles.pickerModalTitle}>Select Assessment 選擇評估</Text>
+              <FlatList
+                data={ASSESSMENT_NAMES}
+                keyExtractor={name => name}
+                style={styles.pickerList}
+                renderItem={({ item: name }) => (
+                  <TouchableOpacity
+                    style={[styles.pickerItem, assignAssessmentName === name && styles.pickerItemSelected]}
+                    onPress={() => { setAssignAssessmentName(name); setShowAssessmentNamePicker(false); }}
+                  >
+                    <Text style={styles.pickerItemName}>{name}</Text>
+                    {assignAssessmentName === name && <Check size={16} color={Colors.accent} />}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </Modal>
     </View>
   );
@@ -499,11 +753,59 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: '700' as const, color: Colors.white },
   headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  tabItemActive: {
+    backgroundColor: Colors.accent,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  tabTextActive: {
+    color: Colors.white,
+  },
   searchContainer: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
     margin: 16, marginBottom: 8, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, gap: 10,
   },
   searchInput: { flex: 1, fontSize: 15, color: Colors.text },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: Colors.infoLight,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.info + '30',
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.info,
+    lineHeight: 17,
+  },
   list: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   card: {
@@ -512,11 +814,42 @@ const styles = StyleSheet.create({
   },
   cardTouchable: { padding: 16 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardName: { fontSize: 16, fontWeight: '600' as const, color: Colors.text },
   cardNameZh: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  participantCode: { fontSize: 12, fontWeight: '500' as const, color: Colors.accent, marginTop: 2 },
   catBadge: { backgroundColor: Colors.infoLight, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   catBadgeText: { fontSize: 11, fontWeight: '600' as const, color: Colors.info },
   cardDesc: { fontSize: 13, color: Colors.textSecondary, marginTop: 8, lineHeight: 18 },
+  assignedMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  assessmentNameBadge: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  assessmentNameText: { fontSize: 12, fontWeight: '600' as const, color: Colors.accentDark },
+  timepointBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  timepointDotSmall: { width: 6, height: 6, borderRadius: 3 },
+  timepointBadgeText: { fontSize: 11, fontWeight: '600' as const },
+  assignedDetails: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  scoreText: { fontSize: 13, fontWeight: '600' as const, color: Colors.text },
+  dateText: { fontSize: 13, color: Colors.textSecondary },
+  methodBadge: {
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  methodBadgeText: { fontSize: 11, color: Colors.textSecondary },
+  notesText: { fontSize: 12, color: Colors.textTertiary, marginTop: 6, fontStyle: 'italic' as const },
   assignBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight,
@@ -530,7 +863,7 @@ const styles = StyleSheet.create({
   },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   noAccessText: { fontSize: 16, color: Colors.textSecondary },
-  emptyText: { fontSize: 15, color: Colors.textTertiary, textAlign: 'center', marginTop: 40 },
+  emptyText: { fontSize: 15, color: Colors.textTertiary, textAlign: 'center', marginTop: 40, lineHeight: 22 },
   placeholderCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 8 },
   placeholderTitle: { fontSize: 20, fontWeight: '700' as const, color: Colors.text, marginTop: 12, textAlign: 'center' },
   placeholderSubtitle: { fontSize: 16, color: Colors.textSecondary },
