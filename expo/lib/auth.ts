@@ -160,17 +160,30 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const clinicianCan = useCallback((feature: string): boolean => {
     if (role === 'admin') return true;
-    if (!clinician) return false;
+    if (!clinician) {
+      console.log(`clinicianCan(${feature}): no clinician`);
+      return false;
+    }
 
     const overrideKey = `override_can_${feature}` as keyof Clinician;
     const overrideVal = clinician[overrideKey];
-    if (overrideVal === true || overrideVal === false) return overrideVal;
+    if (overrideVal === true) {
+      console.log(`clinicianCan(${feature}): override=true`);
+      return true;
+    }
+    if (overrideVal === false) {
+      console.log(`clinicianCan(${feature}): override=false`);
+      return false;
+    }
 
     if (clinicianTier) {
       const tierKey = `can_${feature}` as keyof ClinicianTier;
-      return (clinicianTier[tierKey] as boolean) || false;
+      const tierVal = (clinicianTier[tierKey] as boolean) || false;
+      console.log(`clinicianCan(${feature}): tier.${tierKey}=${tierVal}`);
+      return tierVal;
     }
 
+    console.log(`clinicianCan(${feature}): no tier, defaulting false`);
     return false;
   }, [role, clinician, clinicianTier]);
 

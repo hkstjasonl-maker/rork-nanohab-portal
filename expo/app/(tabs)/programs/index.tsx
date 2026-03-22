@@ -60,7 +60,7 @@ function getScheduleLabel(program: ExerciseProgram): string {
 
 export default function ProgramsScreen() {
   const insets = useSafeAreaInsets();
-  const { isAdmin, clinician, clinicianCan } = useAuth();
+  const { isAdmin, clinician, clinicianTier, clinicianCan } = useAuth();
   const queryClient = useQueryClient();
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
@@ -69,29 +69,40 @@ export default function ProgramsScreen() {
 
   const canViewPrograms = clinicianCan('view_programs');
   const canCreatePrograms = clinicianCan('create_programs');
+  const hasAccess = isAdmin || canViewPrograms || canCreatePrograms;
+
+  console.log('Programs screen - isAdmin:', isAdmin, 'canView:', canViewPrograms, 'canCreate:', canCreatePrograms,
+    'override:', clinician?.override_can_create_programs,
+    'tierLoaded:', !!clinicianTier);
 
   const patientsQuery = useQuery({
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
-      console.log('Fetching patients for program builder');
-      let query = supabase
-        .from('patients')
-        .select('id, patient_name, patient_name_zh, access_code, is_frozen')
-        .eq('is_frozen', false)
-        .order('patient_name', { ascending: true });
+      console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
+      try {
+        let query = supabase
+          .from('patients')
+          .select('id, patient_name, patient_name_zh, access_code, is_frozen')
+          .eq('is_frozen', false)
+          .order('patient_name', { ascending: true });
 
-      if (!isAdmin && clinician?.id) {
-        query = query.eq('clinician_id', clinician.id);
-      }
+        if (!isAdmin && clinician?.id) {
+          query = query.eq('clinician_id', clinician.id);
+        }
 
-      const { data, error } = await query;
-      if (error) {
-        console.log('Program patients fetch error:', error);
-        throw error;
+        const { data, error } = await query;
+        if (error) {
+          console.log('Program patients fetch error:', error);
+          return [];
+        }
+        console.log('Program patients fetched:', data?.length);
+        return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
+      } catch (e) {
+        console.log('Program patients query exception:', e);
+        return [];
       }
-      return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
     },
-    enabled: isAdmin || canViewPrograms,
+    enabled: hasAccess,
   });
 
   const selectedPatient = useMemo(() => {
@@ -214,7 +225,7 @@ export default function ProgramsScreen() {
 
   const keyExtractor = useCallback((item: ExerciseProgram) => item.id, []);
 
-  if (!isAdmin && !canViewPrograms) {
+  if (!hasAccess) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
