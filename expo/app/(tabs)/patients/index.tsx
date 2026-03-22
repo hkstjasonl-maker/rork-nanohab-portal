@@ -43,21 +43,28 @@ export default function PatientsScreen() {
   const patientsQuery = useQuery({
     queryKey: ['patients', isAdmin, clinician?.id],
     queryFn: async () => {
-      let query = supabase
-        .from('patients')
-        .select('*, clinicians(full_name)')
-        .order('created_at', { ascending: false });
+      console.log('Fetching patients, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
+      try {
+        let query = supabase
+          .from('patients')
+          .select('*, clinicians(full_name)')
+          .order('created_at', { ascending: false });
 
-      if (!isAdmin && clinician?.id) {
-        query = query.eq('clinician_id', clinician.id);
-      }
+        if (!isAdmin && clinician?.id) {
+          query = query.eq('clinician_id', clinician.id);
+        }
 
-      const { data, error } = await query;
-      if (error) {
-        console.log('Patients fetch error:', error);
-        throw error;
+        const { data, error } = await query;
+        if (error) {
+          console.log('Patients fetch error:', error);
+          throw error;
+        }
+        console.log('Patients fetched:', data?.length);
+        return (data || []) as (Patient & { clinicians?: { full_name: string } | null })[];
+      } catch (e) {
+        console.log('Patients query exception:', e);
+        return [];
       }
-      return (data || []) as (Patient & { clinicians?: { full_name: string } | null })[];
     },
   });
 

@@ -76,6 +76,12 @@ function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="patient-dashboard/[id]"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

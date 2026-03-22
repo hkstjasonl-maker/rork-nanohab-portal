@@ -17,6 +17,7 @@ import {
   Save,
   Snowflake,
   Sun,
+  BarChart3,
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
@@ -244,6 +245,15 @@ export default function PatientDetailScreen() {
 
         <View style={styles.actionsSection}>
           <TouchableOpacity
+            style={styles.dashboardButton}
+            onPress={() => router.push(`/patient-dashboard/${patient.id}`)}
+            activeOpacity={0.7}
+          >
+            <BarChart3 size={18} color="#1B6B4A" />
+            <Text style={[styles.actionButtonText, { color: '#1B6B4A' }]}>View Dashboard 查看儀表板</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.actionButton, patient.is_frozen ? styles.unfreezeButton : styles.freezeButton]}
             onPress={handleFreeze}
             disabled={freezeMutation.isPending}
@@ -425,6 +435,15 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 14,
+  },
+  dashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#1B6B4A12',
   },
   freezeButton: {
     backgroundColor: Colors.infoLight,

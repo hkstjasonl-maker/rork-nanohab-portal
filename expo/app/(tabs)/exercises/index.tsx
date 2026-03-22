@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +36,8 @@ import {
   Subtitles,
   Mic,
   Play,
+  LayoutGrid,
+  List,
 } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -43,15 +46,16 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Exercise, ExerciseMediaRequest } from '@/types';
 
-function getMediaStatusInfo(status?: string) {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_GAP = 10;
+const GRID_CARD_WIDTH = (SCREEN_WIDTH - 40 - GRID_GAP) / 2;
+
+function getStatusDotColor(status?: string): string {
   switch (status) {
-    case 'pending_review':
-      return { label: 'Pending Review 待審核', color: Colors.warning, bg: Colors.warningLight };
-    case 'rejected':
-      return { label: 'Rejected 已拒絕', color: Colors.danger, bg: Colors.dangerLight };
+    case 'pending_review': return Colors.warning;
+    case 'rejected': return Colors.danger;
     case 'active':
-    default:
-      return { label: 'Active 活躍', color: Colors.success, bg: Colors.successLight };
+    default: return Colors.success;
   }
 }
 
@@ -63,6 +67,7 @@ export default function ExercisesScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const categoriesQuery = useQuery({
     queryKey: ['exercise-categories'],
@@ -168,11 +173,10 @@ export default function ExercisesScreen() {
     return result;
   }, [exercisesQuery.data, searchText, selectedCategory]);
 
-  const renderExercise = useCallback(
+  const renderGridItem = useCallback(
     ({ item }: { item: Exercise }) => (
-      <ExerciseCard
+      <GridExerciseCard
         exercise={item}
-        isAdmin={isAdmin}
         clinicianId={clinician?.id}
         onPress={() =>
           router.push({
@@ -182,7 +186,23 @@ export default function ExercisesScreen() {
         }
       />
     ),
-    [router, isAdmin, clinician?.id]
+    [router, clinician?.id]
+  );
+
+  const renderListItem = useCallback(
+    ({ item }: { item: Exercise }) => (
+      <ListExerciseCard
+        exercise={item}
+        clinicianId={clinician?.id}
+        onPress={() =>
+          router.push({
+            pathname: '/exercise/[id]',
+            params: { id: item.id },
+          })
+        }
+      />
+    ),
+    [router, clinician?.id]
   );
 
   const keyExtractor = useCallback((item: Exercise) => item.id, []);
@@ -241,6 +261,18 @@ export default function ExercisesScreen() {
             color={selectedCategory !== 'All' ? Colors.white : Colors.textSecondary}
           />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.viewToggleButton}
+          onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+          activeOpacity={0.7}
+        >
+          {viewMode === 'grid' ? (
+            <List size={18} color={Colors.textSecondary} />
+          ) : (
+            <LayoutGrid size={18} color={Colors.textSecondary} />
+          )}
+        </TouchableOpacity>
       </View>
 
       {exercisesQuery.isLoading ? (
@@ -258,10 +290,36 @@ export default function ExercisesScreen() {
             <Text style={styles.retryText}>Retry 重試</Text>
           </TouchableOpacity>
         </View>
+      ) : viewMode === 'grid' ? (
+        <FlatList
+          key="grid"
+          data={filteredExercises}
+          renderItem={renderGridItem}
+          keyExtractor={keyExtractor}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={exercisesQuery.isRefetching}
+              onRefresh={() => void exercisesQuery.refetch()}
+              tintColor={Colors.accent}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Dumbbell size={48} color={Colors.borderLight} />
+              <Text style={styles.emptyText}>No exercises found</Text>
+              <Text style={styles.emptyTextZh}>找不到運動</Text>
+            </View>
+          }
+        />
       ) : (
         <FlatList
+          key="list"
           data={filteredExercises}
-          renderItem={renderExercise}
+          renderItem={renderListItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -314,113 +372,131 @@ export default function ExercisesScreen() {
   );
 }
 
-const ExerciseCard = React.memo(function ExerciseCard({
+const GridExerciseCard = React.memo(function GridExerciseCard({
   exercise,
-  isAdmin: _isAdminCard,
   clinicianId,
   onPress,
 }: {
   exercise: Exercise;
-  isAdmin: boolean;
   clinicianId?: string;
   onPress: () => void;
 }) {
-  const statusInfo = getMediaStatusInfo(exercise.media_status);
   const isOwn = exercise.created_by_clinician_id === clinicianId;
   const isShared = exercise.is_shared && !isOwn;
-  const durationMin = exercise.default_duration_minutes
-    ? exercise.default_duration_minutes
-    : null;
-
+  const durationMin = exercise.default_duration_minutes || null;
   const thumbnailUrl = exercise.youtube_video_id
     ? `https://img.youtube.com/vi/${exercise.youtube_video_id}/mqdefault.jpg`
     : null;
   const hasVimeoOnly = !exercise.youtube_video_id && !!exercise.vimeo_video_id;
+  const statusDot = getStatusDotColor(exercise.media_status);
 
   return (
     <TouchableOpacity
-      style={styles.exerciseCard}
+      style={styles.gridCard}
       onPress={onPress}
       activeOpacity={0.7}
       testID={`exercise-card-${exercise.id}`}
     >
       {thumbnailUrl ? (
-        <Image
-          source={{ uri: thumbnailUrl }}
-          style={styles.exerciseThumbnail}
-          resizeMode="cover"
-        />
+        <Image source={{ uri: thumbnailUrl }} style={styles.gridThumb} resizeMode="cover" />
       ) : hasVimeoOnly ? (
-        <View style={styles.exerciseThumbnailPlaceholder}>
-          <Play size={32} color={Colors.white} />
-          <Text style={styles.thumbnailPlaceholderText}>Vimeo Video</Text>
+        <View style={styles.gridThumbPlaceholder}>
+          <Play size={24} color={Colors.white} />
         </View>
-      ) : null}
-      <View style={styles.exerciseCardTop}>
-        <View style={styles.exerciseCardTitleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.exerciseTitle} numberOfLines={2}>
-              {exercise.title_en}
-              {exercise.title_zh_hant ? ` ${exercise.title_zh_hant}` : ''}
-            </Text>
-          </View>
-          <ChevronRight size={16} color={Colors.textTertiary} />
+      ) : (
+        <View style={[styles.gridThumbPlaceholder, { backgroundColor: '#E8E4DF' }]}>
+          <Dumbbell size={24} color={Colors.textTertiary} />
         </View>
+      )}
 
-        <View style={styles.badgesRow}>
-          {exercise.category && (
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{exercise.category}</Text>
+      <View style={styles.gridCardBody}>
+        <Text style={styles.gridTitle} numberOfLines={2}>{exercise.title_en}</Text>
+        {exercise.title_zh_hant ? (
+          <Text style={styles.gridTitleZh} numberOfLines={1}>{exercise.title_zh_hant}</Text>
+        ) : null}
+
+        <View style={styles.gridBadgesRow}>
+          {exercise.category ? (
+            <View style={styles.gridCatBadge}>
+              <Text style={styles.gridCatBadgeText} numberOfLines={1}>{exercise.category}</Text>
             </View>
-          )}
-
+          ) : null}
+          <View style={[styles.gridStatusDot, { backgroundColor: statusDot }]} />
           {isShared && (
-            <View style={styles.sharedBadge}>
-              <Share2 size={10} color={Colors.info} />
-              <Text style={styles.sharedBadgeText}>Shared</Text>
-            </View>
-          )}
-
-          <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: statusInfo.color }]}>
-              {exercise.media_status === 'pending_review'
-                ? '🟡 Pending'
-                : exercise.media_status === 'rejected'
-                ? '🔴 Rejected'
-                : '🟢 Active'}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.exerciseCardBottom}>
-        <View style={styles.mediaBadges}>
-          {exercise.vimeo_video_id && (
-            <View style={styles.mediaBadge}>
-              <Video size={12} color={Colors.accent} />
-              <Text style={styles.mediaBadgeText}>Vimeo</Text>
-            </View>
-          )}
-          {exercise.youtube_video_id && (
-            <View style={styles.mediaBadge}>
-              <Video size={12} color="#FF0000" />
-              <Text style={styles.mediaBadgeText}>YouTube</Text>
-            </View>
-          )}
-          {exercise.audio_instruction_url_en && (
-            <View style={styles.mediaBadge}>
-              <Headphones size={12} color={Colors.success} />
-              <Text style={styles.mediaBadgeText}>Audio</Text>
+            <View style={styles.gridSharedBadge}>
+              <Share2 size={8} color={Colors.info} />
             </View>
           )}
         </View>
+
         {durationMin !== null && (
-          <View style={styles.durationBadge}>
-            <Clock size={12} color={Colors.textSecondary} />
-            <Text style={styles.durationText}>{durationMin} min</Text>
+          <View style={styles.gridDuration}>
+            <Clock size={10} color={Colors.textTertiary} />
+            <Text style={styles.gridDurationText}>{durationMin} min</Text>
           </View>
         )}
       </View>
+    </TouchableOpacity>
+  );
+});
+
+const ListExerciseCard = React.memo(function ListExerciseCard({
+  exercise,
+  clinicianId,
+  onPress,
+}: {
+  exercise: Exercise;
+  clinicianId?: string;
+  onPress: () => void;
+}) {
+  const isOwn = exercise.created_by_clinician_id === clinicianId;
+  const isShared = exercise.is_shared && !isOwn;
+  const durationMin = exercise.default_duration_minutes || null;
+  const thumbnailUrl = exercise.youtube_video_id
+    ? `https://img.youtube.com/vi/${exercise.youtube_video_id}/mqdefault.jpg`
+    : null;
+  const hasVimeoOnly = !exercise.youtube_video_id && !!exercise.vimeo_video_id;
+  const statusDot = getStatusDotColor(exercise.media_status);
+
+  return (
+    <TouchableOpacity
+      style={styles.listCard}
+      onPress={onPress}
+      activeOpacity={0.7}
+      testID={`exercise-list-${exercise.id}`}
+    >
+      {thumbnailUrl ? (
+        <Image source={{ uri: thumbnailUrl }} style={styles.listThumb} resizeMode="cover" />
+      ) : hasVimeoOnly ? (
+        <View style={styles.listThumbPlaceholder}>
+          <Play size={18} color={Colors.white} />
+        </View>
+      ) : (
+        <View style={[styles.listThumbPlaceholder, { backgroundColor: '#E8E4DF' }]}>
+          <Dumbbell size={18} color={Colors.textTertiary} />
+        </View>
+      )}
+
+      <View style={styles.listCardBody}>
+        <Text style={styles.listTitle} numberOfLines={1}>{exercise.title_en}</Text>
+        <View style={styles.listMetaRow}>
+          {exercise.category ? (
+            <View style={styles.listCatBadge}>
+              <Text style={styles.listCatBadgeText} numberOfLines={1}>{exercise.category}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.gridStatusDot, { backgroundColor: statusDot }]} />
+          {isShared && (
+            <View style={styles.gridSharedBadge}>
+              <Share2 size={8} color={Colors.info} />
+            </View>
+          )}
+          {durationMin !== null && (
+            <Text style={styles.listDurationText}>{durationMin}m</Text>
+          )}
+        </View>
+      </View>
+      <ChevronRight size={16} color={Colors.textTertiary} />
     </TouchableOpacity>
   );
 });
@@ -740,39 +816,18 @@ function AddExerciseModal({
 }
 
 function MediaRequestSheet({
-  videoRequired,
-  setVideoRequired,
-  audioOptional,
-  setAudioOptional,
-  subtitleOptional,
-  setSubtitleOptional,
-  liveSubtitlesOptional,
-  setLiveSubtitlesOptional,
-  videoUrl,
-  setVideoUrl,
-  notes,
-  setNotes,
-  declared,
-  setDeclared,
-  onSubmit,
-  onClose,
+  videoRequired, setVideoRequired, audioOptional, setAudioOptional,
+  subtitleOptional, setSubtitleOptional, liveSubtitlesOptional, setLiveSubtitlesOptional,
+  videoUrl, setVideoUrl, notes, setNotes, declared, setDeclared, onSubmit, onClose,
 }: {
-  videoRequired: boolean;
-  setVideoRequired: (v: boolean) => void;
-  audioOptional: boolean;
-  setAudioOptional: (v: boolean) => void;
-  subtitleOptional: boolean;
-  setSubtitleOptional: (v: boolean) => void;
-  liveSubtitlesOptional: boolean;
-  setLiveSubtitlesOptional: (v: boolean) => void;
-  videoUrl: string;
-  setVideoUrl: (v: string) => void;
-  notes: string;
-  setNotes: (v: string) => void;
-  declared: boolean;
-  setDeclared: (v: boolean) => void;
-  onSubmit: () => void;
-  onClose: () => void;
+  videoRequired: boolean; setVideoRequired: (v: boolean) => void;
+  audioOptional: boolean; setAudioOptional: (v: boolean) => void;
+  subtitleOptional: boolean; setSubtitleOptional: (v: boolean) => void;
+  liveSubtitlesOptional: boolean; setLiveSubtitlesOptional: (v: boolean) => void;
+  videoUrl: string; setVideoUrl: (v: string) => void;
+  notes: string; setNotes: (v: string) => void;
+  declared: boolean; setDeclared: (v: boolean) => void;
+  onSubmit: () => void; onClose: () => void;
 }) {
   return (
     <View style={styles.sheetOverlay}>
@@ -780,82 +835,32 @@ function MediaRequestSheet({
         <View style={styles.sheetHandle} />
         <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
           <Text style={styles.sheetTitle}>Media Setup Request 媒體設置申請</Text>
-
           <View style={styles.sheetCheckboxGroup}>
-            <CheckboxRow
-              label="Video Link (Required) 影片連結（必填）"
-              icon={<Video size={16} color={Colors.accent} />}
-              checked={videoRequired}
-              onToggle={() => setVideoRequired(!videoRequired)}
-            />
-            <CheckboxRow
-              label="Audio (Optional) 音訊（選填）"
-              icon={<Headphones size={16} color={Colors.success} />}
-              checked={audioOptional}
-              onToggle={() => setAudioOptional(!audioOptional)}
-            />
-            <CheckboxRow
-              label="Subtitle (Optional) 字幕（選填）"
-              icon={<Subtitles size={16} color={Colors.info} />}
-              checked={subtitleOptional}
-              onToggle={() => setSubtitleOptional(!subtitleOptional)}
-            />
-            <CheckboxRow
-              label="Live Subtitles (Optional) 即時字幕（選填）"
-              icon={<Mic size={16} color={Colors.warning} />}
-              checked={liveSubtitlesOptional}
-              onToggle={() => setLiveSubtitlesOptional(!liveSubtitlesOptional)}
-            />
+            <CheckboxRow label="Video Link (Required) 影片連結（必填）" icon={<Video size={16} color={Colors.accent} />} checked={videoRequired} onToggle={() => setVideoRequired(!videoRequired)} />
+            <CheckboxRow label="Audio (Optional) 音訊（選填）" icon={<Headphones size={16} color={Colors.success} />} checked={audioOptional} onToggle={() => setAudioOptional(!audioOptional)} />
+            <CheckboxRow label="Subtitle (Optional) 字幕（選填）" icon={<Subtitles size={16} color={Colors.info} />} checked={subtitleOptional} onToggle={() => setSubtitleOptional(!subtitleOptional)} />
+            <CheckboxRow label="Live Subtitles (Optional) 即時字幕（選填）" icon={<Mic size={16} color={Colors.warning} />} checked={liveSubtitlesOptional} onToggle={() => setLiveSubtitlesOptional(!liveSubtitlesOptional)} />
           </View>
-
           <View style={styles.sheetField}>
             <View style={styles.sheetFieldLabel}>
               <Link size={14} color={Colors.textSecondary} />
               <Text style={styles.formLabel}>Video URL 影片網址</Text>
             </View>
-            <TextInput
-              style={styles.formInput}
-              value={videoUrl}
-              onChangeText={setVideoUrl}
-              placeholder="https://..."
-              placeholderTextColor={Colors.textTertiary}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
+            <TextInput style={styles.formInput} value={videoUrl} onChangeText={setVideoUrl} placeholder="https://..." placeholderTextColor={Colors.textTertiary} autoCapitalize="none" keyboardType="url" />
           </View>
-
           <View style={styles.sheetField}>
             <View style={styles.sheetFieldLabel}>
               <MessageSquare size={14} color={Colors.textSecondary} />
               <Text style={styles.formLabel}>Notes 備註</Text>
             </View>
-            <TextInput
-              style={[styles.formInput, styles.formInputMultiline]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Additional notes..."
-              placeholderTextColor={Colors.textTertiary}
-              multiline
-              numberOfLines={3}
-            />
+            <TextInput style={[styles.formInput, styles.formInputMultiline]} value={notes} onChangeText={setNotes} placeholder="Additional notes..." placeholderTextColor={Colors.textTertiary} multiline numberOfLines={3} />
           </View>
-
-          <CheckboxRow
-            label="I declare the above information is accurate and I have the rights to this media.\n本人聲明以上資料準確無誤，並擁有相關媒體使用權。"
-            checked={declared}
-            onToggle={() => setDeclared(!declared)}
-            bold
-          />
-
+          <CheckboxRow label="I declare the above information is accurate and I have the rights to this media.\n本人聲明以上資料準確無誤，並擁有相關媒體使用權。" checked={declared} onToggle={() => setDeclared(!declared)} bold />
           <View style={styles.sheetButtons}>
             <TouchableOpacity style={styles.sheetCancelBtn} onPress={onClose}>
               <Text style={styles.sheetCancelText}>Cancel 取消</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sheetSubmitBtn, !declared && styles.sheetSubmitBtnDisabled]}
-              onPress={onSubmit}
-              disabled={!declared}
-            >
+            <TouchableOpacity style={[styles.sheetSubmitBtn, !declared && styles.sheetSubmitBtnDisabled]} onPress={onSubmit} disabled={!declared}>
               <Text style={styles.sheetSubmitText}>Submit 提交</Text>
             </TouchableOpacity>
           </View>
@@ -865,18 +870,8 @@ function MediaRequestSheet({
   );
 }
 
-function CheckboxRow({
-  label,
-  icon,
-  checked,
-  onToggle,
-  bold,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  checked: boolean;
-  onToggle: () => void;
-  bold?: boolean;
+function CheckboxRow({ label, icon, checked, onToggle, bold }: {
+  label: string; icon?: React.ReactNode; checked: boolean; onToggle: () => void; bold?: boolean;
 }) {
   return (
     <TouchableOpacity style={styles.checkboxRow} onPress={onToggle} activeOpacity={0.7}>
@@ -889,561 +884,120 @@ function CheckboxRow({
   );
 }
 
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'url';
-  multiline?: boolean;
+function FormField({ label, value, onChangeText, placeholder, keyboardType, multiline }: {
+  label: string; value: string; onChangeText: (text: string) => void; placeholder: string;
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'url'; multiline?: boolean;
 }) {
   return (
     <View style={styles.formField}>
       <Text style={styles.formLabel}>{label}</Text>
       <TextInput
         style={[styles.formInput, multiline && styles.formInputMultiline]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.textTertiary}
-        keyboardType={keyboardType || 'default'}
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
-        autoCapitalize="sentences"
+        value={value} onChangeText={onChangeText} placeholder={placeholder}
+        placeholderTextColor={Colors.textTertiary} keyboardType={keyboardType || 'default'}
+        multiline={multiline} numberOfLines={multiline ? 3 : 1} autoCapitalize="sentences"
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F0ED',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  headerCount: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-    marginTop: 2,
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 44,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.text,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  filterButtonActive: {
-    backgroundColor: Colors.accent,
-  },
-  filterButtonText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-    maxWidth: 80,
-  },
-  filterButtonTextActive: {
-    color: Colors.white,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: Colors.danger,
-  },
-  retryButton: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  retryText: {
-    color: Colors.white,
-    fontWeight: '600' as const,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-    gap: 10,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 80,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.textTertiary,
-    fontWeight: '500' as const,
-  },
-  emptyTextZh: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  exerciseCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    overflow: 'hidden' as const,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  exerciseThumbnail: {
-    width: '100%' as const,
-    height: 120,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  exerciseThumbnailPlaceholder: {
-    width: '100%' as const,
-    height: 120,
-    backgroundColor: '#2C2C2E',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 6,
-  },
-  thumbnailPlaceholderText: {
-    fontSize: 12,
-    color: Colors.white,
-    fontWeight: '500' as const,
-    opacity: 0.7,
-  },
-  exerciseCardTop: {
-    gap: 8,
-    padding: 14,
-  },
-  exerciseCardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  exerciseTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.text,
-    lineHeight: 20,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  categoryBadge: {
-    backgroundColor: '#EDE9E3',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-  },
-  sharedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: Colors.infoLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  sharedBadgeText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: Colors.info,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-  },
-  exerciseCardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 0,
-    paddingTop: 10,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-  },
-  mediaBadges: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  mediaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  mediaBadgeText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-  },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  durationText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  categoryModal: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxHeight: 420,
-  },
-  categoryModalTitle: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  categoryList: {
-    maxHeight: 340,
-  },
-  categoryOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 2,
-  },
-  categoryOptionSelected: {
-    backgroundColor: Colors.accentLight + '40',
-  },
-  categoryOptionText: {
-    fontSize: 15,
-    color: Colors.text,
-  },
-  categoryOptionTextSelected: {
-    fontWeight: '600' as const,
-    color: Colors.accent,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.white,
-  },
-  modalCancel: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  modalSave: {
-    fontSize: 15,
-    color: Colors.accent,
-    fontWeight: '600' as const,
-  },
-  modalBody: {
-    flex: 1,
-  },
-  modalBodyContent: {
-    padding: 20,
-    gap: 16,
-    paddingBottom: 40,
-  },
-  formField: {
-    gap: 6,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    marginLeft: 4,
-  },
-  formInput: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  formInputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  categoryPicker: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  categoryChipSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500' as const,
-  },
-  categoryChipTextSelected: {
-    color: Colors.white,
-  },
-  mediaRequestSection: {
-    marginTop: 8,
-  },
-  mediaRequestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.info,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  mediaRequestButtonText: {
-    color: Colors.white,
-    fontWeight: '600' as const,
-    fontSize: 15,
-  },
-  mediaRequestDone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.successLight,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  mediaRequestDoneText: {
-    color: Colors.success,
-    fontWeight: '600' as const,
-    fontSize: 15,
-  },
-  sheetOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  sheetContainer: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderLight,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  sheetCheckboxGroup: {
-    gap: 4,
-    marginBottom: 16,
-  },
-  sheetField: {
-    gap: 6,
-    marginBottom: 16,
-  },
-  sheetFieldLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sheetButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-    paddingBottom: 20,
-  },
-  sheetCancelBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceSecondary,
-  },
-  sheetCancelText: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-  },
-  sheetSubmitBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.accent,
-  },
-  sheetSubmitBtnDisabled: {
-    opacity: 0.5,
-  },
-  sheetSubmitText: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.white,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    gap: 10,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  checkboxIcon: {
-    marginRight: -2,
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.text,
-    lineHeight: 19,
-  },
-  checkboxLabelBold: {
-    fontWeight: '500' as const,
-  },
+  container: { flex: 1, backgroundColor: '#F2F0ED' },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+  headerTitle: { fontSize: 28, fontWeight: '700' as const, color: Colors.text, letterSpacing: -0.3 },
+  headerCount: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const, marginTop: 2 },
+  searchContainer: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', gap: 8, alignItems: 'center' },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 14, height: 44, gap: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.text },
+  filterButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 10, height: 44, gap: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  filterButtonActive: { backgroundColor: Colors.accent },
+  filterButtonText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' as const, maxWidth: 70 },
+  filterButtonTextActive: { color: Colors.white },
+  viewToggleButton: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.white, alignItems: 'center' as const, justifyContent: 'center' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { fontSize: 14, color: Colors.textSecondary },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  errorText: { fontSize: 14, color: Colors.danger },
+  retryButton: { backgroundColor: Colors.accent, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+  retryText: { color: Colors.white, fontWeight: '600' as const },
+  gridContent: { paddingHorizontal: 20, paddingBottom: 100, gap: 10 },
+  gridRow: { justifyContent: 'space-between' as const },
+  listContent: { paddingHorizontal: 20, paddingBottom: 100, gap: 8 },
+  emptyContainer: { alignItems: 'center', paddingTop: 80, gap: 8 },
+  emptyText: { fontSize: 16, color: Colors.textTertiary, fontWeight: '500' as const },
+  emptyTextZh: { fontSize: 13, color: Colors.textTertiary },
+
+  gridCard: { width: GRID_CARD_WIDTH, backgroundColor: Colors.white, borderRadius: 14, overflow: 'hidden' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2, marginBottom: 2 },
+  gridThumb: { width: '100%' as const, height: 100, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
+  gridThumbPlaceholder: { width: '100%' as const, height: 100, backgroundColor: '#2C2C2E', alignItems: 'center' as const, justifyContent: 'center' as const },
+  gridCardBody: { padding: 10, gap: 4 },
+  gridTitle: { fontSize: 13, fontWeight: '600' as const, color: Colors.text, lineHeight: 17 },
+  gridTitleZh: { fontSize: 11, color: Colors.textSecondary, lineHeight: 14 },
+  gridBadgesRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 2 },
+  gridCatBadge: { backgroundColor: '#EDE9E3', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, maxWidth: 90 },
+  gridCatBadgeText: { fontSize: 9, fontWeight: '600' as const, color: Colors.textSecondary },
+  gridStatusDot: { width: 7, height: 7, borderRadius: 4 },
+  gridSharedBadge: { backgroundColor: Colors.infoLight, borderRadius: 4, padding: 3 },
+  gridDuration: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  gridDurationText: { fontSize: 10, color: Colors.textTertiary, fontWeight: '500' as const },
+
+  listCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, borderRadius: 12, padding: 10, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  listThumb: { width: 60, height: 60, borderRadius: 10 },
+  listThumbPlaceholder: { width: 60, height: 60, borderRadius: 10, backgroundColor: '#2C2C2E', alignItems: 'center' as const, justifyContent: 'center' as const },
+  listCardBody: { flex: 1, gap: 4 },
+  listTitle: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
+  listMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listCatBadge: { backgroundColor: '#EDE9E3', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  listCatBadgeText: { fontSize: 10, fontWeight: '600' as const, color: Colors.textSecondary },
+  listDurationText: { fontSize: 10, color: Colors.textTertiary, fontWeight: '500' as const },
+
+  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  categoryModal: { backgroundColor: Colors.white, borderRadius: 16, padding: 20, width: '100%', maxHeight: 420 },
+  categoryModalTitle: { fontSize: 17, fontWeight: '600' as const, color: Colors.text, marginBottom: 12 },
+  categoryList: { maxHeight: 340 },
+  categoryOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, marginBottom: 2 },
+  categoryOptionSelected: { backgroundColor: Colors.accentLight + '40' },
+  categoryOptionText: { fontSize: 15, color: Colors.text },
+  categoryOptionTextSelected: { fontWeight: '600' as const, color: Colors.accent },
+  modalContainer: { flex: 1, backgroundColor: Colors.background },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.white },
+  modalCancel: { fontSize: 15, color: Colors.textSecondary },
+  modalTitle: { fontSize: 17, fontWeight: '600' as const, color: Colors.text },
+  modalSave: { fontSize: 15, color: Colors.accent, fontWeight: '600' as const },
+  modalBody: { flex: 1 },
+  modalBodyContent: { padding: 20, gap: 16, paddingBottom: 40 },
+  formField: { gap: 6 },
+  formLabel: { fontSize: 13, fontWeight: '600' as const, color: Colors.textSecondary, marginLeft: 4 },
+  formInput: { backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.text, borderWidth: 1, borderColor: Colors.borderLight },
+  formInputMultiline: { minHeight: 80, textAlignVertical: 'top' as const },
+  categoryPicker: { flexDirection: 'row', marginTop: 4 },
+  categoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.white, marginRight: 8, borderWidth: 1, borderColor: Colors.borderLight },
+  categoryChipSelected: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  categoryChipText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const },
+  categoryChipTextSelected: { color: Colors.white },
+  mediaRequestSection: { marginTop: 8 },
+  mediaRequestButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.info, borderRadius: 12, paddingVertical: 14 },
+  mediaRequestButtonText: { color: Colors.white, fontWeight: '600' as const, fontSize: 15 },
+  mediaRequestDone: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.successLight, borderRadius: 12, paddingVertical: 14 },
+  mediaRequestDoneText: { color: Colors.success, fontWeight: '600' as const, fontSize: 15 },
+  sheetOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  sheetContainer: { backgroundColor: Colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.borderLight, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.text, marginBottom: 16 },
+  sheetCheckboxGroup: { gap: 4, marginBottom: 16 },
+  sheetField: { gap: 6, marginBottom: 16 },
+  sheetFieldLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 16, paddingBottom: 20 },
+  sheetCancelBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.surfaceSecondary },
+  sheetCancelText: { fontSize: 15, fontWeight: '600' as const, color: Colors.textSecondary },
+  sheetSubmitBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.accent },
+  sheetSubmitBtnDisabled: { opacity: 0.5 },
+  sheetSubmitText: { fontSize: 15, fontWeight: '600' as const, color: Colors.white },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  checkboxIcon: { marginRight: -2 },
+  checkboxLabel: { flex: 1, fontSize: 14, color: Colors.text, lineHeight: 19 },
+  checkboxLabelBold: { fontWeight: '500' as const },
 });

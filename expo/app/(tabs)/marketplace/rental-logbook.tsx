@@ -32,7 +32,7 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { MarketplaceRental } from '@/types';
 
-type RentalStatus = 'pending' | 'active' | 'expired' | 'cancelled' | 'disputed';
+type RentalStatus = 'pending' | 'active' | 'expired' | 'cancelled' | 'disputed' | 'cooling_off';
 
 function getStatusInfo(status: RentalStatus) {
   switch (status) {
@@ -61,17 +61,28 @@ export default function RentalLogbookScreen() {
     queryFn: async () => {
       if (!clinician?.id) return [];
       console.log('Fetching my rentals for:', clinician.id);
-      const { data, error } = await supabase
-        .from('marketplace_rentals')
-        .select('*, marketplace_listings(*, exercise_library(title_en, title_zh_hant, category), clinicians(full_name, full_name_zh))')
-        .eq('renting_clinician_id', clinician.id)
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('marketplace_rentals')
+          .select('*, marketplace_listings(*, exercise_library(title_en, title_zh_hant, category), clinicians(full_name, full_name_zh))')
+          .eq('renting_clinician_id', clinician.id)
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        console.log('My rentals fetch error:', error);
-        throw error;
+        if (error) {
+          console.log('My rentals fetch error:', error);
+          const { data: fallback, error: fbErr } = await supabase
+            .from('marketplace_rentals')
+            .select('*, marketplace_listings(*)')
+            .eq('renting_clinician_id', clinician.id)
+            .order('created_at', { ascending: false });
+          if (fbErr) throw fbErr;
+          return (fallback || []) as MarketplaceRental[];
+        }
+        return (data || []) as MarketplaceRental[];
+      } catch (e) {
+        console.log('My rentals exception:', e);
+        return [];
       }
-      return (data || []) as MarketplaceRental[];
     },
     enabled: !!clinician?.id,
   });

@@ -79,20 +79,33 @@ export default function BrowseMarketplaceScreen() {
     queryKey: ['marketplace-listings'],
     queryFn: async () => {
       console.log('Fetching marketplace listings');
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('marketplace_listings')
-        .select('*, exercise_library(*), clinicians(full_name, full_name_zh, organization)')
-        .eq('approval_status', 'approved')
-        .eq('is_active', true)
-        .gte('listing_end_date', today)
-        .order('created_at', { ascending: false });
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+          .from('marketplace_listings')
+          .select('*, exercise_library(*), clinicians(full_name, full_name_zh, organization)')
+          .eq('approval_status', 'approved')
+          .eq('is_active', true)
+          .gte('listing_end_date', today)
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        console.log('Marketplace listings fetch error:', error);
-        throw error;
+        if (error) {
+          console.log('Marketplace listings fetch error:', error);
+          const { data: fallback, error: fallbackError } = await supabase
+            .from('marketplace_listings')
+            .select('*')
+            .eq('approval_status', 'approved')
+            .eq('is_active', true)
+            .gte('listing_end_date', today)
+            .order('created_at', { ascending: false });
+          if (fallbackError) throw fallbackError;
+          return (fallback || []) as MarketplaceListing[];
+        }
+        return (data || []) as MarketplaceListing[];
+      } catch (e) {
+        console.log('Marketplace exception:', e);
+        return [];
       }
-      return (data || []) as MarketplaceListing[];
     },
   });
 
