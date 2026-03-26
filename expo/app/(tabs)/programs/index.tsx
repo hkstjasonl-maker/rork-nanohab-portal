@@ -76,27 +76,36 @@ export default function ProgramsScreen() {
   const patientsQuery = useQuery({
     queryKey: ['program-patients', isAdmin, clinician?.id],
     queryFn: async () => {
-      console.log('Fetching patients for program builder, isAdmin:', isAdmin, 'clinicianId:', clinician?.id);
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from('patients')
-          .select('id, patient_name, patient_name_zh, access_code, is_frozen')
-          .eq('is_frozen', false)
-          .order('patient_name', { ascending: true });
+          .select('*');
 
-        if (!isAdmin && clinician?.id) {
-          query = query.eq('clinician_id', clinician.id);
-        }
-
-        const { data, error } = await query;
         if (error) {
           console.log('Program patients fetch error:', error);
           return [];
         }
-        console.log('Program patients fetched:', data?.length);
-        return (data || []) as Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
+
+        let patients = data || [];
+
+        if (!isAdmin && clinician?.id) {
+          patients = patients.filter(p => p.clinician_id === clinician.id);
+        }
+
+        patients = patients.filter(p => p.is_frozen !== true);
+
+        patients.sort((a, b) => (a.patient_name || '').localeCompare(b.patient_name || ''));
+
+        console.log('Program patients fetched:', patients.length);
+        return patients.map(p => ({
+          id: p.id,
+          patient_name: p.patient_name || 'Unknown',
+          patient_name_zh: p.patient_name_zh || '',
+          access_code: p.access_code || '',
+          is_frozen: p.is_frozen || false,
+        }));
       } catch (e) {
-        console.log('Program patients query exception:', e);
+        console.log('Program patients exception:', e);
         return [];
       }
     },
@@ -306,7 +315,7 @@ export default function ProgramsScreen() {
         />
       )}
 
-      {canCreatePrograms && selectedPatientId && (
+      {(isAdmin || canCreatePrograms) && selectedPatientId && (
         <TouchableOpacity
           style={[styles.fab, { bottom: 24 }]}
           onPress={() => {

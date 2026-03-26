@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,15 +20,38 @@ import {
   Snowflake,
   Sun,
   BarChart3,
+  ClipboardCheck,
+  Utensils,
+  X,
+  Search,
+  Check,
+  ChevronDown,
 } from 'lucide-react-native';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient } from '@/types';
+
+interface AssessmentLibraryItem {
+  id: string;
+  name_en: string;
+  name_zh?: string;
+  category?: string;
+}
+
+interface FeedingSkillVideo {
+  id: string;
+  title_en: string;
+  title_zh?: string;
+  category?: string;
+  youtube_video_id?: string;
+}
 
 export default function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { isAdmin, clinicianCan } = useAuth();
 
   const [name, setName] = useState('');
   const [_nameZh, setNameZh] = useState('');
@@ -39,6 +64,12 @@ export default function PatientDetailScreen() {
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [isFormDirty, setIsFormDirty] = useState(false);
+
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [showFeedingSkillsModal, setShowFeedingSkillsModal] = useState(false);
+
+  const canAssignAssessments = isAdmin || clinicianCan('assign_assessments');
+  const canPushFeedingSkills = isAdmin || clinicianCan('push_feeding_skills');
 
   const patientQuery = useQuery({
     queryKey: ['patient', id],
@@ -71,7 +102,6 @@ export default function PatientDetailScreen() {
         .from('patients')
         .update({
           patient_name: name.trim(),
-
           diagnosis: diagnosis.trim() || null,
           diagnosis_zh: diagnosisZh.trim() || null,
           gender: gender.trim() || null,
@@ -220,7 +250,6 @@ export default function PatientDetailScreen() {
         <View style={styles.formSection}>
           <Text style={styles.formSectionTitle}>Basic Info 基本資料</Text>
           <EditField label="Name 姓名 *" value={name} onChangeText={handleFieldChange(setName)} placeholder="Patient name" />
-
           <EditField label="Gender 性別" value={gender} onChangeText={handleFieldChange(setGender)} placeholder="M / F / Other" />
         </View>
 
@@ -253,8 +282,30 @@ export default function PatientDetailScreen() {
             <Text style={[styles.actionButtonText, { color: '#1B6B4A' }]}>View Dashboard 查看儀表板</Text>
           </TouchableOpacity>
 
+          {canAssignAssessments && (
+            <TouchableOpacity
+              style={styles.assessmentButton}
+              onPress={() => setShowAssessmentModal(true)}
+              activeOpacity={0.7}
+            >
+              <ClipboardCheck size={18} color={Colors.info} />
+              <Text style={[styles.actionButtonText, { color: Colors.info }]}>Assign Assessment 分配評估</Text>
+            </TouchableOpacity>
+          )}
+
+          {canPushFeedingSkills && (
+            <TouchableOpacity
+              style={styles.feedingSkillsButton}
+              onPress={() => setShowFeedingSkillsModal(true)}
+              activeOpacity={0.7}
+            >
+              <Utensils size={18} color={Colors.accent} />
+              <Text style={[styles.actionButtonText, { color: Colors.accent }]}>Push Feeding Skills 推送餵食技巧</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.actionButton, patient.is_frozen ? styles.unfreezeButton : styles.freezeButton]}
+            style={[styles.actionButton, patient.is_frozen ? styles.unfreezeButton : styles.freezeActionButton]}
             onPress={handleFreeze}
             disabled={freezeMutation.isPending}
             activeOpacity={0.7}
@@ -275,7 +326,362 @@ export default function PatientDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AssignAssessmentModal
+        visible={showAssessmentModal}
+        onClose={() => setShowAssessmentModal(false)}
+        patientId={id!}
+        patientName={patient.patient_name}
+      />
+
+      <PushFeedingSkillsModal
+        visible={showFeedingSkillsModal}
+        onClose={() => setShowFeedingSkillsModal(false)}
+        patientId={id!}
+        patientName={patient.patient_name}
+      />
     </KeyboardAvoidingView>
+  );
+}
+
+function AssignAssessmentModal({
+  visible,
+  onClose,
+  patientId,
+  patientName,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  patientId: string;
+  patientName: string;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [assignNotes, setAssignNotes] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+
+  const assessmentsQuery = useQuery({
+    queryKey: ['assessment-library-for-assign'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('assessment_library')
+          .select('id, name_en, name_zh, category')
+          .order('name_en');
+        if (error) {
+          console.log('Assessment library fetch error:', error);
+          return [];
+        }
+        return (data || []) as AssessmentLibraryItem[];
+      } catch (e) {
+        console.log('Assessment library exception:', e);
+        return [];
+      }
+    },
+    enabled: visible,
+  });
+
+  const selectedAssessment = useMemo(() => {
+    return assessmentsQuery.data?.find(a => a.id === selectedAssessmentId) || null;
+  }, [assessmentsQuery.data, selectedAssessmentId]);
+
+  const filteredAssessments = useMemo(() => {
+    if (!assessmentsQuery.data) return [];
+    if (!pickerSearch.trim()) return assessmentsQuery.data;
+    const s = pickerSearch.toLowerCase();
+    return assessmentsQuery.data.filter(a =>
+      a.name_en?.toLowerCase().includes(s) ||
+      a.name_zh?.toLowerCase().includes(s)
+    );
+  }, [assessmentsQuery.data, pickerSearch]);
+
+  const assignMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAssessmentId) throw new Error('Please select an assessment');
+      const assessmentName = selectedAssessment?.name_en || selectedAssessmentId;
+      const { error } = await supabase.from('assessment_submissions').insert({
+        patient_id: patientId,
+        assessment_id: assessmentName,
+        assigned_at: new Date().toISOString(),
+        status: 'pending',
+        notes: assignNotes.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      onClose();
+      setSelectedAssessmentId(null);
+      setAssignNotes('');
+      Alert.alert('Assigned 已指派', 'Assessment assigned successfully.\n評估已成功分配。');
+      void queryClient.invalidateQueries({ queryKey: ['admin-assigned-assessments'] });
+    },
+    onError: (error: Error) => {
+      console.log('Assign assessment error:', error);
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <KeyboardAvoidingView
+        style={styles.modalContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <X size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Assign Assessment 分配評估</Text>
+          <TouchableOpacity onPress={() => assignMutation.mutate()} disabled={assignMutation.isPending}>
+            {assignMutation.isPending ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <Text style={styles.modalSave}>Assign</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.patientBanner}>
+            <Text style={styles.patientBannerLabel}>Patient 患者</Text>
+            <Text style={styles.patientBannerName}>{patientName}</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Assessment 評估 *</Text>
+          <TouchableOpacity
+            style={styles.pickerBtn}
+            onPress={() => setShowPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pickerBtnText, !selectedAssessment && { color: Colors.textTertiary }]}>
+              {selectedAssessment ? `${selectedAssessment.name_en}${selectedAssessment.name_zh ? ` ${selectedAssessment.name_zh}` : ''}` : 'Select assessment...'}
+            </Text>
+            <ChevronDown size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
+
+          <Text style={styles.fieldLabel}>Notes 備註</Text>
+          <TextInput
+            style={[styles.fieldInput, { height: 80, textAlignVertical: 'top' as const }]}
+            value={assignNotes}
+            onChangeText={setAssignNotes}
+            placeholder="Optional notes..."
+            placeholderTextColor={Colors.textTertiary}
+            multiline
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal visible={showPicker} animationType="fade" transparent>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
+          <View style={styles.pickerModal}>
+            <Text style={styles.pickerModalTitle}>Select Assessment 選擇評估</Text>
+            <View style={styles.pickerSearchRow}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.pickerSearchInput}
+                value={pickerSearch}
+                onChangeText={setPickerSearch}
+                placeholder="Search..."
+                placeholderTextColor={Colors.textTertiary}
+                autoCorrect={false}
+              />
+            </View>
+            {assessmentsQuery.isLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: 20 }} />
+            ) : (
+              <FlatList
+                data={filteredAssessments}
+                keyExtractor={a => a.id}
+                style={styles.pickerList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.pickerItem, selectedAssessmentId === item.id && styles.pickerItemSelected]}
+                    onPress={() => { setSelectedAssessmentId(item.id); setShowPicker(false); }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickerItemName}>{item.name_en}</Text>
+                      {item.name_zh ? <Text style={styles.pickerItemSub}>{item.name_zh}</Text> : null}
+                    </View>
+                    {selectedAssessmentId === item.id && <Check size={16} color={Colors.accent} />}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={<Text style={styles.pickerEmpty}>No assessments found</Text>}
+              />
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </Modal>
+  );
+}
+
+function PushFeedingSkillsModal({
+  visible,
+  onClose,
+  patientId,
+  patientName,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  patientId: string;
+  patientName: string;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
+  const [search, setSearch] = useState('');
+
+  const videosQuery = useQuery({
+    queryKey: ['feeding-skills-for-push'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('feeding_skill_videos')
+          .select('id, title_en, title_zh, category, youtube_video_id')
+          .eq('is_active', true)
+          .order('title_en');
+        if (error) {
+          console.log('Feeding skills fetch error:', error);
+          return [];
+        }
+        return (data || []) as FeedingSkillVideo[];
+      } catch (e) {
+        console.log('Feeding skills exception:', e);
+        return [];
+      }
+    },
+    enabled: visible,
+  });
+
+  const filtered = useMemo(() => {
+    if (!videosQuery.data) return [];
+    if (!search.trim()) return videosQuery.data;
+    const s = search.toLowerCase();
+    return videosQuery.data.filter(v =>
+      v.title_en?.toLowerCase().includes(s) ||
+      v.title_zh?.toLowerCase().includes(s) ||
+      v.category?.toLowerCase().includes(s)
+    );
+  }, [videosQuery.data, search]);
+
+  const toggleVideo = useCallback((videoId: string) => {
+    setSelectedVideoIds(prev =>
+      prev.includes(videoId) ? prev.filter(id => id !== videoId) : [...prev, videoId]
+    );
+  }, []);
+
+  const pushMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedVideoIds.length === 0) throw new Error('Please select at least one video');
+      for (const videoId of selectedVideoIds) {
+        const { error } = await supabase.from('feeding_skill_assignments').insert({
+          video_id: videoId,
+          patient_id: patientId,
+          target_type: 'individual',
+          start_date: new Date().toISOString().split('T')[0],
+          is_active: true,
+        });
+        if (error) {
+          console.log('Push feeding skill error for video', videoId, ':', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      onClose();
+      setSelectedVideoIds([]);
+      setSearch('');
+      Alert.alert('Pushed 已推送', `${selectedVideoIds.length} feeding skill(s) pushed to ${patientName}.\n已推送 ${selectedVideoIds.length} 個餵食技巧。`);
+      void queryClient.invalidateQueries({ queryKey: ['feeding-skill-assignments'] });
+    },
+    onError: (error: Error) => {
+      console.log('Push feeding skills error:', error);
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={() => { onClose(); setSelectedVideoIds([]); setSearch(''); }}>
+            <X size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Push Feeding Skills 推送餵食技巧</Text>
+          <TouchableOpacity onPress={() => pushMutation.mutate()} disabled={pushMutation.isPending || selectedVideoIds.length === 0}>
+            {pushMutation.isPending ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <Text style={[styles.modalSave, selectedVideoIds.length === 0 && { opacity: 0.4 }]}>
+                Push ({selectedVideoIds.length})
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.patientBanner}>
+          <Text style={styles.patientBannerLabel}>Patient 患者</Text>
+          <Text style={styles.patientBannerName}>{patientName}</Text>
+        </View>
+
+        <View style={styles.feedingSearchContainer}>
+          <Search size={16} color={Colors.textTertiary} />
+          <TextInput
+            style={styles.feedingSearchInput}
+            placeholder="Search feeding skills..."
+            placeholderTextColor={Colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            autoCorrect={false}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <X size={14} color={Colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {videosQuery.isLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={Colors.accent} />
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={v => v.id}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            renderItem={({ item }) => {
+              const isSelected = selectedVideoIds.includes(item.id);
+              return (
+                <TouchableOpacity
+                  style={[styles.feedingVideoItem, isSelected && styles.feedingVideoItemSelected]}
+                  onPress={() => toggleVideo(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.feedingCheckbox, isSelected && styles.feedingCheckboxActive]}>
+                    {isSelected && <Check size={14} color={Colors.white} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.feedingVideoTitle} numberOfLines={1}>{item.title_en}</Text>
+                    {item.title_zh ? <Text style={styles.feedingVideoTitleZh} numberOfLines={1}>{item.title_zh}</Text> : null}
+                    {item.category ? (
+                      <View style={styles.feedingCatBadge}>
+                        <Text style={styles.feedingCatText}>{item.category}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', marginTop: 40, gap: 6 }}>
+                <Utensils size={36} color={Colors.textTertiary} />
+                <Text style={{ fontSize: 14, color: Colors.textTertiary }}>No feeding skill videos found</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+    </Modal>
   );
 }
 
@@ -445,7 +851,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#1B6B4A12',
   },
-  freezeButton: {
+  assessmentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.infoLight,
+  },
+  feedingSkillsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFF0E6',
+  },
+  freezeActionButton: {
     backgroundColor: Colors.infoLight,
   },
   unfreezeButton: {
@@ -454,5 +878,225 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 15,
     fontWeight: '600' as const,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  modalSave: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: Colors.accent,
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 20,
+    gap: 4,
+  },
+  patientBanner: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  patientBannerLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
+    textTransform: 'uppercase' as const,
+  },
+  patientBannerName: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginTop: 2,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.textSecondary,
+    marginBottom: 6,
+    marginTop: 14,
+  },
+  fieldInput: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pickerBtnText: {
+    fontSize: 15,
+    color: Colors.text,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  pickerModal: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxHeight: 500,
+  },
+  pickerModalTitle: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  pickerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+  },
+  pickerList: {
+    maxHeight: 340,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  pickerItemSelected: {
+    backgroundColor: Colors.accentLight + '40',
+  },
+  pickerItemName: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: Colors.text,
+  },
+  pickerItemSub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  pickerEmpty: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  feedingSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  feedingSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+  },
+  feedingVideoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+  },
+  feedingVideoItemSelected: {
+    borderColor: Colors.accent,
+    backgroundColor: '#FFF8F4',
+  },
+  feedingCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedingCheckboxActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  feedingVideoTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  feedingVideoTitleZh: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  feedingCatBadge: {
+    backgroundColor: '#FFF0E6',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  feedingCatText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
   },
 });

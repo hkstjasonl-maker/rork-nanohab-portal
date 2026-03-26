@@ -59,6 +59,10 @@ interface AssignedAssessment {
   patients?: {
     patient_name: string;
   } | null;
+  assessment_library?: {
+    name_en: string;
+    name_zh?: string;
+  } | null;
 }
 
 interface PatientPick {
@@ -136,11 +140,19 @@ export default function AssessmentsScreen() {
       try {
         const { data, error } = await supabase
           .from('assessment_submissions')
-          .select('*, patients(patient_name)')
+          .select('*, patients(patient_name), assessment_library(name_en, name_zh)')
           .order('assigned_at', { ascending: false });
         if (error) {
-          console.log('Assigned assessments error:', error);
-          return [];
+          console.log('Assigned assessments error (with join):', error);
+          const { data: fallback, error: fallbackError } = await supabase
+            .from('assessment_submissions')
+            .select('*, patients(patient_name)')
+            .order('assigned_at', { ascending: false });
+          if (fallbackError) {
+            console.log('Assigned assessments fallback error:', fallbackError);
+            return [];
+          }
+          return (fallback || []) as AssignedAssessment[];
         }
         return (data || []) as AssignedAssessment[];
       } catch (e) {
@@ -500,7 +512,7 @@ export default function AssessmentsScreen() {
 
                   <View style={styles.assignedMeta}>
                     <View style={styles.assessmentNameBadge}>
-                      <Text style={styles.assessmentNameText}>{item.assessment_id}</Text>
+                      <Text style={styles.assessmentNameText}>{item.assessment_library?.name_en || item.assessment_id}</Text>
                     </View>
                     <View style={[styles.timepointBadge, { backgroundColor: item.status === 'completed' ? Colors.successLight : item.status === 'pending' ? Colors.warningLight : Colors.surfaceSecondary }]}>
                       <View style={[styles.timepointDotSmall, { backgroundColor: item.status === 'completed' ? Colors.success : item.status === 'pending' ? Colors.warning : Colors.textTertiary }]} />
