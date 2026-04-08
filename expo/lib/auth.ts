@@ -50,9 +50,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const parsed: StoredAuth = JSON.parse(stored);
 
       if (parsed.role === 'admin') {
-        const { data: { session } } = await authClient.auth.getSession();
-        if (session) {
-          setAdminUser({ id: session.user.id, email: session.user.email || '' });
+        if (parsed.adminUserId && parsed.adminEmail) {
+          setAdminUser({ id: parsed.adminUserId, email: parsed.adminEmail });
           setRole('admin');
           setIsAuthenticated(true);
         } else {
@@ -94,14 +93,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (error) throw error;
     if (!data.user) throw new Error('Login failed');
 
-    setAdminUser({ id: data.user.id, email: data.user.email || email });
+    const adminId = data.user.id;
+    const adminEmailVal = data.user.email || email;
+
+    await authClient.auth.signOut();
+
+    setAdminUser({ id: adminId, email: adminEmailVal });
     setRole('admin');
     setIsAuthenticated(true);
 
     await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
       role: 'admin',
-      adminUserId: data.user.id,
-      adminEmail: data.user.email || email,
+      adminUserId: adminId,
+      adminEmail: adminEmailVal,
     }));
   }, []);
 
@@ -113,7 +117,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     const { data, error } = await supabase
       .from('clinicians')
-      .select('*')
+      .select('*, clinician_tiers(*)')
       .eq('email', email.toLowerCase().trim())
       .eq('password_hash', hash)
       .single();
@@ -124,15 +128,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     await supabase.from('clinicians').update({ last_login_at: new Date().toISOString() }).eq('id', data.id);
 
+    const tier = (data as any).clinician_tiers || null;
     const c = data as Clinician;
     setClinician(c);
+    setClinicianTier(tier as ClinicianTier | null);
     setRole('clinician');
     setIsAuthenticated(true);
     setNeedsAgreement(!c.agreement_accepted_at);
-
-    if (c.tier_id) {
-      void loadClinicianTier(c.tier_id);
-    }
 
     await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
       role: 'clinician',

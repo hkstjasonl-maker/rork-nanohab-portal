@@ -108,7 +108,6 @@ export default function PatientsScreen() {
     return patientsQuery.data.filter(
       (p) =>
         p.patient_name?.toLowerCase().includes(lower) ||
-        p.patient_name_zh?.toLowerCase().includes(lower) ||
         p.access_code?.toLowerCase().includes(lower) ||
         p.diagnosis?.toLowerCase().includes(lower)
     );
@@ -285,7 +284,6 @@ const PatientCard = React.memo(function PatientCard({
         <View style={styles.patientInfo}>
           <Text style={styles.patientName} numberOfLines={1}>
             {patient.patient_name}
-            {patient.patient_name_zh ? ` ${patient.patient_name_zh}` : ''}
           </Text>
           <Text style={styles.patientCode}>{patient.access_code}</Text>
           {patient.diagnosis && (
@@ -367,7 +365,6 @@ function AddPatientModal({
       const accessCode = generateAccessCode();
       const { error } = await supabase.from('patients').insert({
         patient_name: name.trim(),
-        patient_name_zh: nameZh.trim() || null,
         access_code: accessCode,
         diagnosis: diagnosis.trim() || null,
         gender: gender.trim() || null,

@@ -57,7 +57,6 @@ export interface ClinicianTier {
 export interface Patient {
   id: string;
   patient_name: string;
-  patient_name_zh?: string;
   access_code: string;
   diagnosis?: string;
   diagnosis_zh?: string;
@@ -152,9 +151,9 @@ export interface ExerciseMediaRequest {
 export interface ExerciseProgram {
   id: string;
   patient_id: string;
-  name: string;
-  name_zh?: string;
-  name_zh_cn?: string;
+  name_en: string;
+  name_zh_hant?: string;
+  name_zh_hans?: string;
   schedule_type: 'daily' | 'custom';
   custom_days?: boolean[];
   issue_date: string;

@@ -100,7 +100,6 @@ export default function ProgramsScreen() {
         return patients.map(p => ({
           id: p.id,
           patient_name: p.patient_name || 'Unknown',
-          patient_name_zh: p.patient_name_zh || '',
           access_code: p.access_code || '',
           is_frozen: p.is_frozen || false,
         }));
@@ -198,7 +197,7 @@ export default function ProgramsScreen() {
   const handleDeleteProgram = useCallback((program: ExerciseProgram) => {
     Alert.alert(
       'Delete Program 刪除計劃',
-      `Are you sure you want to delete "${program.name}"?\n確定要刪除「${program.name}」嗎？`,
+      `Are you sure you want to delete "${program.name_en}"?\n確定要刪除「${program.name_en}」嗎？`,
       [
         { text: 'Cancel 取消', style: 'cancel' },
         {
@@ -256,7 +255,6 @@ export default function ProgramsScreen() {
             {selectedPatient ? (
               <Text style={styles.patientSelectorValue} numberOfLines={1}>
                 {selectedPatient.patient_name}
-                {selectedPatient.patient_name_zh ? ` ${selectedPatient.patient_name_zh}` : ''}
                 <Text style={styles.patientSelectorCode}> ({selectedPatient.access_code})</Text>
               </Text>
             ) : (
@@ -383,8 +381,8 @@ const ProgramCard = React.memo(function ProgramCard({
       <View style={styles.programCardHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.programName} numberOfLines={2}>
-            {program.name}
-            {program.name_zh ? ` ${program.name_zh}` : ''}
+            {program.name_en}
+            {program.name_zh_hant ? ` ${program.name_zh_hant}` : ''}
           </Text>
         </View>
         <View style={styles.programCardActions}>
@@ -454,7 +452,7 @@ function PatientPickerModal({
   onClose,
 }: {
   visible: boolean;
-  patients: Pick<Patient, 'id' | 'patient_name' | 'patient_name_zh' | 'access_code' | 'is_frozen'>[];
+  patients: Pick<Patient, 'id' | 'patient_name' | 'access_code' | 'is_frozen'>[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClose: () => void;
@@ -466,7 +464,6 @@ function PatientPickerModal({
     return patients.filter(
       (p) =>
         p.patient_name?.toLowerCase().includes(lower) ||
-        p.patient_name_zh?.toLowerCase().includes(lower) ||
         p.access_code?.toLowerCase().includes(lower)
     );
   }, [patients, search]);
@@ -511,7 +508,6 @@ function PatientPickerModal({
                     numberOfLines={1}
                   >
                     {patient.patient_name}
-                    {patient.patient_name_zh ? ` ${patient.patient_name_zh}` : ''}
                   </Text>
                   <Text style={styles.pickerOptionCode}>{patient.access_code}</Text>
                 </View>
@@ -548,9 +544,9 @@ function ProgramFormModal({
   const queryClient = useQueryClient();
   const isEditing = !!program;
 
-  const [name, setName] = useState(program?.name || '');
-  const [nameZh, setNameZh] = useState(program?.name_zh || '');
-  const [nameZhCn, setNameZhCn] = useState(program?.name_zh_cn || '');
+  const [name, setName] = useState(program?.name_en || '');
+  const [nameZh, setNameZh] = useState(program?.name_zh_hant || '');
+  const [nameZhCn, setNameZhCn] = useState(program?.name_zh_hans || '');
   const [issueDate, setIssueDate] = useState(program?.issue_date || new Date().toISOString().split('T')[0]);
   const [expiryDate, setExpiryDate] = useState(program?.expiry_date || '');
   const [scheduleType, setScheduleType] = useState<'daily' | 'custom'>(program?.schedule_type || 'daily');
@@ -664,9 +660,9 @@ function ProgramFormModal({
 
       const programData = {
         patient_id: patientId,
-        name: name.trim(),
-        name_zh: nameZh.trim() || null,
-        name_zh_cn: nameZhCn.trim() || null,
+        name_en: name.trim(),
+        name_zh_hant: nameZh.trim() || null,
+        name_zh_hans: nameZhCn.trim() || null,
         schedule_type: scheduleType,
         custom_days: scheduleType === 'custom' ? customDays : null,
         issue_date: issueDate,
