@@ -1098,7 +1098,7 @@ function ProgramFormModal({
             ) : (
               programExercises.map((pe, idx) => (
                 <ProgramExerciseRow
-                  key={pe.exercise_id}
+                  key={pe.id || `${pe.exercise_id}-${idx}`}
                   item={pe}
                   index={idx}
                   total={programExercises.length}
