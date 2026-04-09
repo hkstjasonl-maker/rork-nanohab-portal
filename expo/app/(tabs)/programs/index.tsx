@@ -143,11 +143,15 @@ export default function ProgramsScreen() {
     enabled: !!selectedPatientId,
   });
 
+  const programIds = useMemo(
+    () => (programsQuery.data || []).map((p) => p.id),
+    [programsQuery.data]
+  );
+
   const programExercisesQuery = useQuery({
-    queryKey: ['program-exercises', selectedPatientId],
+    queryKey: ['program-exercises', selectedPatientId, programIds],
     queryFn: async () => {
-      if (!selectedPatientId || !programsQuery.data?.length) return {};
-      const programIds = programsQuery.data.map((p) => p.id);
+      if (!programIds.length) return {};
       console.log('Fetching exercises for programs:', programIds);
 
       const { data, error } = await supabase
@@ -166,9 +170,10 @@ export default function ProgramsScreen() {
         if (!grouped[ex.program_id]) grouped[ex.program_id] = [];
         grouped[ex.program_id].push(ex);
       });
+      console.log('Program exercises grouped:', Object.keys(grouped).map(k => `${k}: ${grouped[k].length}`));
       return grouped;
     },
-    enabled: !!selectedPatientId && (programsQuery.data?.length ?? 0) > 0,
+    enabled: !!selectedPatientId && programIds.length > 0,
   });
 
   const deleteProgramMutation = useMutation({

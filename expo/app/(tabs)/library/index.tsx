@@ -119,9 +119,21 @@ export default function LibraryScreen() {
     }, [])
   );
 
-  const enrollmentsQuery = useQuery({
-    queryKey: ['my-courses', clinicianId],
+  const coursesQuery = useQuery({
+    queryKey: ['my-courses', isAdmin, clinicianId],
     queryFn: async () => {
+      if (isAdmin) {
+        const { data, error } = await supabase
+          .from('training_courses')
+          .select('*')
+          .eq('is_active', true)
+          .order('course_date', { ascending: false });
+        if (error) {
+          console.log('Error fetching all courses:', error);
+          return [];
+        }
+        return (data || []) as TrainingCourse[];
+      }
       if (!clinicianId) return [];
       const { data, error } = await supabase
         .from('training_course_enrollments')
@@ -132,14 +144,32 @@ export default function LibraryScreen() {
         console.log('Error fetching enrollments:', error);
         return [];
       }
-      return (data || []) as unknown as CourseEnrollment[];
+      return ((data || []) as unknown as CourseEnrollment[]).map(e => e.training_courses).filter(Boolean) as TrainingCourse[];
     },
-    enabled: !!clinicianId,
   });
 
-  const assignmentsQuery = useQuery({
-    queryKey: ['my-materials', clinicianId],
+  const materialsQuery = useQuery({
+    queryKey: ['my-materials', isAdmin, clinicianId],
     queryFn: async () => {
+      if (isAdmin) {
+        const { data, error } = await supabase
+          .from('training_materials')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order');
+        if (error) {
+          console.log('Error fetching all materials:', error);
+          return [];
+        }
+        return (data || []).map(m => ({
+          id: `admin-${m.id}`,
+          material_id: m.id,
+          clinician_id: '',
+          assigned_at: '',
+          is_revoked: false,
+          training_materials: m,
+        })) as MaterialAssignment[];
+      }
       if (!clinicianId) return [];
       const { data, error } = await supabase
         .from('training_material_assignments')
@@ -153,7 +183,6 @@ export default function LibraryScreen() {
       }
       return (data || []) as unknown as MaterialAssignment[];
     },
-    enabled: !!clinicianId,
   });
 
   const logViewMutation = useMutation({
@@ -178,14 +207,14 @@ export default function LibraryScreen() {
   });
 
   const materialsByCourse = useMemo(() => {
-    const assignments = assignmentsQuery.data || [];
-    const enrollments = enrollmentsQuery.data || [];
+    const assignments = materialsQuery.data || [];
+    const courses = coursesQuery.data || [];
     const courseMap = new Map<string, { course: TrainingCourse; materials: MaterialAssignment[] }>();
 
-    for (const enrollment of enrollments) {
-      if (enrollment.training_courses) {
-        courseMap.set(enrollment.course_id, {
-          course: enrollment.training_courses,
+    for (const course of courses) {
+      if (course) {
+        courseMap.set(course.id, {
+          course,
           materials: [],
         });
       }
@@ -208,44 +237,51 @@ export default function LibraryScreen() {
     }
 
     return { courses: Array.from(courseMap.values()), ungrouped };
-  }, [assignmentsQuery.data, enrollmentsQuery.data]);
+  }, [materialsQuery.data, coursesQuery.data]);
 
   const toggleCourse = useCallback((courseId: string) => {
     setExpandedCourses(prev => ({ ...prev, [courseId]: !prev[courseId] }));
   }, []);
 
   const handleOpenMaterial = useCallback(async (assignment: MaterialAssignment) => {
-    const { status } = getAccessStatus(assignment);
     const mat = assignment.training_materials;
 
-    if (status === 'expired') {
-      Alert.alert(
-        'Access Expired 存取已過期',
-        'Your access to this material has expired.\n您對此資料的存取權限已過期。'
-      );
-      return;
-    }
+    if (!isAdmin) {
+      const { status } = getAccessStatus(assignment);
 
-    if (status === 'not_yet') {
-      Alert.alert(
-        'Not Yet Available 尚未開放',
-        `This material will be available from ${formatDate(assignment.access_start_date)}.\n此資料將於 ${formatDate(assignment.access_start_date)} 開放。`
-      );
-      return;
-    }
-
-    try {
-      const { data: verifyData } = await supabase
-        .from('training_material_assignments')
-        .select('id, is_revoked')
-        .eq('id', assignment.id)
-        .single();
-
-      if (!verifyData || verifyData.is_revoked) {
-        Alert.alert('Access Revoked 存取已撤銷', 'Your access to this material has been revoked.\n您對此資料的存取權限已被撤銷。');
+      if (status === 'expired') {
+        Alert.alert(
+          'Access Expired 存取已過期',
+          'Your access to this material has expired.\n您對此資料的存取權限已過期。'
+        );
         return;
       }
 
+      if (status === 'not_yet') {
+        Alert.alert(
+          'Not Yet Available 尚未開放',
+          `This material will be available from ${formatDate(assignment.access_start_date)}.\n此資料將於 ${formatDate(assignment.access_start_date)} 開放。`
+        );
+        return;
+      }
+
+      try {
+        const { data: verifyData } = await supabase
+          .from('training_material_assignments')
+          .select('id, is_revoked')
+          .eq('id', assignment.id)
+          .single();
+
+        if (!verifyData || verifyData.is_revoked) {
+          Alert.alert('Access Revoked 存取已撤銷', 'Your access to this material has been revoked.\n您對此資料的存取權限已被撤銷。');
+          return;
+        }
+      } catch (e) {
+        console.log('Error verifying access:', e);
+      }
+    }
+
+    try {
       const { data: signedUrlData, error: signedUrlError } = await supabase
         .storage
         .from('training-materials')
@@ -257,7 +293,9 @@ export default function LibraryScreen() {
         return;
       }
 
-      logViewMutation.mutate({ assignmentId: assignment.id, materialId: mat.id });
+      if (!isAdmin) {
+        logViewMutation.mutate({ assignmentId: assignment.id, materialId: mat.id });
+      }
 
       router.push({
         pathname: '/pdf-viewer',
@@ -272,25 +310,13 @@ export default function LibraryScreen() {
       console.log('Error opening material:', e);
       Alert.alert('Error 錯誤', 'Something went wrong. Please try again.\n發生錯誤，請重試。');
     }
-  }, [clinicianId, logViewMutation, router]);
+  }, [isAdmin, clinicianId, logViewMutation, router]);
 
-  const isLoading = enrollmentsQuery.isLoading || assignmentsQuery.isLoading;
+  const isLoading = coursesQuery.isLoading || materialsQuery.isLoading;
   const onRefresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['my-courses', clinicianId] });
-    queryClient.invalidateQueries({ queryKey: ['my-materials', clinicianId] });
-  }, [queryClient, clinicianId]);
-
-  if (isAdmin) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Shield size={48} color={Colors.textTertiary} />
-        <Text style={styles.emptyTitle}>Admin View 管理員檢視</Text>
-        <Text style={styles.emptySubtitle}>
-          Manage training materials in the Admin tab.{'\n'}請在管理員頁面管理培訓資料。
-        </Text>
-      </View>
-    );
-  }
+    queryClient.invalidateQueries({ queryKey: ['my-courses'] });
+    queryClient.invalidateQueries({ queryKey: ['my-materials'] });
+  }, [queryClient]);
 
   if (isLoading) {
     return (
@@ -300,9 +326,11 @@ export default function LibraryScreen() {
     );
   }
 
+  const hasCourses = materialsByCourse.courses.length > 0;
   const hasMaterials = materialsByCourse.courses.some(c => c.materials.length > 0) || materialsByCourse.ungrouped.length > 0;
+  const hasContent = hasCourses || hasMaterials;
 
-  if (!hasMaterials) {
+  if (!hasContent) {
     return (
       <ScrollView
         style={styles.container}
@@ -399,7 +427,10 @@ export default function LibraryScreen() {
     const mat = assignment.training_materials;
     if (!mat) return null;
 
-    const { status, label } = getAccessStatus(assignment);
+    const accessInfo = isAdmin
+      ? { status: 'active' as AccessStatus, label: 'Open 開啟' }
+      : getAccessStatus(assignment);
+    const { status, label } = accessInfo;
     const isExpired = status === 'expired';
     const isNotYet = status === 'not_yet';
 
