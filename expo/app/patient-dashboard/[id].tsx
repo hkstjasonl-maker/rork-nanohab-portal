@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Animated,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -15,218 +16,388 @@ import {
   ChevronLeft,
   Activity,
   Clock,
-  CalendarDays,
+  Star,
+  Flame,
+  TrendingUp,
   BarChart3,
-  FlaskConical,
-  Video,
+  Zap,
+  Calendar,
+  AlertTriangle,
+  CheckCircle2,
+  ThumbsUp,
+  ClipboardList,
+  Dumbbell,
+  Brain,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 
-const RESEARCH_GREEN = '#1B6B4A';
-const RESEARCH_GREEN_LIGHT = '#E8F5EE';
+type PeriodFilter = '7d' | '30d' | '90d' | 'all';
 
-interface PatientData {
+interface ExerciseLog {
+  id: string;
+  patient_id: string;
+  exercise_id?: string;
+  completed_at?: string;
+  self_rating?: number;
+  stars_earned?: number;
+  exercise_title?: string;
+  title_en?: string;
+}
+
+interface AppSession {
+  id: string;
+  patient_id: string;
+  opened_at?: string;
+  closed_at?: string;
+  duration_seconds?: number;
+}
+
+interface QuestionnaireResponse {
+  id: string;
+  patient_id?: string;
+  created_at?: string;
+  total_score?: number;
+  questionnaire_templates?: { name?: string } | null;
+}
+
+interface PatientInfo {
   id: string;
   patient_name: string;
   access_code: string;
-  is_research_participant?: boolean;
-  research_cohort?: string;
-  research_participant_code?: string;
-  research_consent_date?: string;
-  research_baseline_date?: string;
-  research_endpoint_date?: string;
+  diagnosis?: string;
 }
 
-interface SessionLog {
-  id: string;
-  session_start?: string;
-  session_date?: string;
-  exercise_title_en?: string;
-  prescribed_sets?: number;
-  prescribed_reps?: number;
-  completed_sets?: number;
-  completed_reps?: number;
-  completion_rate?: number;
-  duration_seconds?: number;
-  self_rating?: number;
-  mirror_mode?: boolean;
-  video_recorded?: boolean;
+const ACCENT = '#0F766E';
+const ACCENT_LIGHT = '#CCFBF1';
+const ACCENT_BG = '#F0FDFA';
+const WARM = '#E07A3A';
+const CARD_BG = '#FFFFFF';
+const PAGE_BG = '#F7F7F5';
+
+const PERIOD_OPTIONS: { key: PeriodFilter; label: string }[] = [
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
+  { key: 'all', label: 'All' },
+];
+
+function getPeriodDate(period: PeriodFilter): Date | null {
+  if (period === 'all') return null;
+  const now = new Date();
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  now.setDate(now.getDate() - days);
+  now.setHours(0, 0, 0, 0);
+  return now;
 }
 
-interface AssessmentRow {
-  id: string;
-  assessment_name?: string;
-  timepoint?: string;
-  total_score?: number;
-  administered_date?: string;
+function filterByDate<T>(items: T[], dateKey: string, period: PeriodFilter): T[] {
+  const cutoff = getPeriodDate(period);
+  if (!cutoff) return items;
+  return items.filter(item => {
+    const val = (item as Record<string, unknown>)[dateKey];
+    if (!val || typeof val !== 'string') return false;
+    return new Date(val) >= cutoff;
+  });
 }
 
-interface ProgramRow {
-  id: string;
-  name?: string;
-  schedule_type?: string;
-  issue_date?: string;
-  expiry_date?: string;
-  is_active?: boolean;
-  exercises?: { id: string }[];
+function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
-function getCohortLabel(cohort?: string): string {
-  switch (cohort) {
-    case 'stroke': return 'Stroke 中風';
-    case 'npc_active': return 'NPC Active 鼻咽癌治療中';
-    case 'npc_post': return 'NPC Post 鼻咽癌治療後';
-    default: return cohort || '';
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  } catch {
+    return '—';
   }
 }
 
-function getTimepointColor(tp?: string): string {
-  switch (tp) {
-    case 'baseline': return Colors.success;
-    case 'week4': return Colors.warning;
-    case 'endpoint': return Colors.danger;
-    default: return Colors.textTertiary;
+function formatFullDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return '—';
   }
 }
 
-export default function PatientDashboardScreen() {
+export default function ClinicalDashboardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [period, setPeriod] = useState<PeriodFilter>('30d');
 
   const patientQuery = useQuery({
-    queryKey: ['patient-dashboard', id],
+    queryKey: ['clinical-dashboard-patient', id],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
           .from('patients')
-          .select('id, patient_name, access_code, is_research_participant, research_cohort, research_participant_code, research_consent_date, research_baseline_date, research_endpoint_date')
+          .select('id, patient_name, access_code, diagnosis')
           .eq('id', id)
           .single();
         if (error) throw error;
-        return data as PatientData;
+        return data as PatientInfo;
       } catch (e) {
-        console.log('Patient dashboard fetch error:', e);
+        console.log('Clinical dashboard patient fetch error:', e);
         return null;
       }
     },
     enabled: !!id,
   });
 
-  const sessionsQuery = useQuery({
-    queryKey: ['patient-sessions', id],
+  const exerciseLogsQuery = useQuery({
+    queryKey: ['clinical-exercise-logs', id],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('research_session_logs')
+          .from('exercise_logs')
           .select('*')
           .eq('patient_id', id)
-          .order('session_start', { ascending: false })
-          .limit(10);
-        if (error) throw error;
-        return (data || []) as SessionLog[];
+          .order('completed_at', { ascending: true });
+        if (error) {
+          console.log('Exercise logs fetch error:', error);
+          return [];
+        }
+        return (data || []) as ExerciseLog[];
       } catch (e) {
-        console.log('Sessions fetch error:', e);
+        console.log('Exercise logs exception:', e);
         return [];
       }
     },
     enabled: !!id,
   });
 
-  const allSessionsStatsQuery = useQuery({
-    queryKey: ['patient-sessions-stats', id],
+  const appSessionsQuery = useQuery({
+    queryKey: ['clinical-app-sessions', id],
     queryFn: async () => {
       try {
-        const { data, error, count } = await supabase
-          .from('research_session_logs')
-          .select('completion_rate, duration_seconds, session_date', { count: 'exact' })
-          .eq('patient_id', id);
-        if (error) throw error;
-        const rows = data || [];
-        const totalCount = count || rows.length;
-        const avgCompletion = rows.length > 0
-          ? rows.reduce((s, r) => s + (r.completion_rate || 0), 0) / rows.length
-          : 0;
-        const totalDuration = rows.reduce((s, r) => s + (r.duration_seconds || 0), 0);
-        const uniqueDays = new Set(rows.map(r => r.session_date).filter(Boolean)).size;
-        return { totalCount, avgCompletion, totalDuration, uniqueDays };
+        const { data, error } = await supabase
+          .from('app_sessions')
+          .select('*')
+          .eq('patient_id', id)
+          .order('opened_at', { ascending: true });
+        if (error) {
+          console.log('App sessions fetch error:', error);
+          return [];
+        }
+        return (data || []) as AppSession[];
       } catch (e) {
-        console.log('Stats fetch error:', e);
-        return { totalCount: 0, avgCompletion: 0, totalDuration: 0, uniqueDays: 0 };
+        console.log('App sessions exception:', e);
+        return [];
       }
     },
     enabled: !!id,
   });
 
-  const programsQuery = useQuery({
-    queryKey: ['patient-programs', id],
+  const questionnaireQuery = useQuery({
+    queryKey: ['clinical-questionnaires', id],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('exercise_programs')
-          .select('id, name, schedule_type, issue_date, expiry_date, is_active, exercises(id)')
+          .from('questionnaire_responses')
+          .select('*, questionnaire_templates(name)')
           .eq('patient_id', id)
           .order('created_at', { ascending: false });
-        if (error) throw error;
-        return (data || []) as ProgramRow[];
+        if (error) {
+          console.log('Questionnaire responses fetch error:', error);
+          return [];
+        }
+        return (data || []) as QuestionnaireResponse[];
       } catch (e) {
-        console.log('Programs fetch error:', e);
+        console.log('Questionnaire responses exception:', e);
         return [];
       }
     },
     enabled: !!id,
   });
 
-  const assessmentsQuery = useQuery({
-    queryKey: ['patient-assessments', id],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('research_assessments')
-          .select('id, assessment_name, timepoint, total_score, administered_date')
-          .eq('patient_id', id)
-          .order('administered_date', { ascending: false });
-        if (error) throw error;
-        return (data || []) as AssessmentRow[];
-      } catch (e) {
-        console.log('Assessments fetch error:', e);
-        return [];
+  const allLogs = exerciseLogsQuery.data || [];
+  const allSessions = appSessionsQuery.data || [];
+  const allQuestionnaires = questionnaireQuery.data || [];
+
+  const filteredLogs = useMemo(() => filterByDate(allLogs, 'completed_at', period), [allLogs, period]);
+  const filteredSessions = useMemo(() => filterByDate(allSessions, 'opened_at', period), [allSessions, period]);
+
+  const stats = useMemo(() => {
+    const sessionCount = filteredSessions.length;
+    const totalSessionDuration = filteredSessions.reduce((s, sess) => s + (sess.duration_seconds || 0), 0);
+    const avgSessionLength = sessionCount > 0 ? Math.round(totalSessionDuration / sessionCount) : 0;
+
+    const logCount = filteredLogs.length;
+    const daysWithLogs = new Set(
+      filteredLogs
+        .map(l => l.completed_at ? new Date(l.completed_at).toDateString() : null)
+        .filter(Boolean)
+    );
+    const daysActive = daysWithLogs.size;
+    const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : Math.max(1, daysActive);
+    const exercisesPerDay = periodDays > 0 ? (logCount / periodDays) : 0;
+
+    const ratingsArr = filteredLogs.filter(l => l.self_rating != null).map(l => l.self_rating!);
+    const avgRating = ratingsArr.length > 0 ? ratingsArr.reduce((a, b) => a + b, 0) / ratingsArr.length : 0;
+
+    const totalStars = filteredLogs.reduce((s, l) => s + (l.stars_earned || 0), 0);
+
+    const totalPracticeSeconds = filteredLogs.reduce((s, l) => {
+      return s;
+    }, 0);
+    const totalPracticeMinutes = Math.round(totalSessionDuration / 60);
+
+    let currentStreak = 0;
+    let longestStreak = 0;
+    if (daysWithLogs.size > 0) {
+      const sortedDays = Array.from(daysWithLogs)
+        .map(d => new Date(d!))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      let streak = 1;
+      let maxStreak = 1;
+      for (let i = 1; i < sortedDays.length; i++) {
+        const diff = (sortedDays[i].getTime() - sortedDays[i - 1].getTime()) / (1000 * 60 * 60 * 24);
+        if (diff === 1) {
+          streak++;
+          maxStreak = Math.max(maxStreak, streak);
+        } else {
+          streak = 1;
+        }
       }
-    },
-    enabled: !!id,
-  });
+      longestStreak = maxStreak;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lastDay = sortedDays[sortedDays.length - 1];
+      lastDay.setHours(0, 0, 0, 0);
+      const daysSinceLast = Math.round((today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceLast <= 1) {
+        let cs = 1;
+        for (let i = sortedDays.length - 2; i >= 0; i--) {
+          const diff = (sortedDays[i + 1].getTime() - sortedDays[i].getTime()) / (1000 * 60 * 60 * 24);
+          if (diff === 1) cs++;
+          else break;
+        }
+        currentStreak = cs;
+      }
+    }
+
+    return {
+      sessionCount,
+      avgSessionLength,
+      logCount,
+      exercisesPerDay,
+      avgRating,
+      totalStars,
+      daysActive,
+      currentStreak,
+      longestStreak,
+      totalPracticeMinutes,
+    };
+  }, [filteredLogs, filteredSessions, period]);
+
+  const dailyActivity = useMemo(() => {
+    const days = 14;
+    const result: { date: string; label: string; count: number }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toDateString();
+      const label = `${d.getMonth() + 1}/${d.getDate()}`;
+      const count = filteredLogs.filter(l => {
+        if (!l.completed_at) return false;
+        return new Date(l.completed_at).toDateString() === dateStr;
+      }).length;
+      result.push({ date: dateStr, label, count });
+    }
+    return result;
+  }, [filteredLogs]);
+
+  const maxDailyCount = useMemo(() => Math.max(...dailyActivity.map(d => d.count), 1), [dailyActivity]);
+
+  const exerciseBreakdown = useMemo(() => {
+    const counts: Record<string, { name: string; count: number }> = {};
+    filteredLogs.forEach(log => {
+      const name = log.title_en || log.exercise_title || 'Unknown';
+      const key = name.toLowerCase();
+      if (!counts[key]) counts[key] = { name, count: 0 };
+      counts[key].count++;
+    });
+    return Object.values(counts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [filteredLogs]);
+
+  const maxExerciseCount = useMemo(() => Math.max(...exerciseBreakdown.map(e => e.count), 1), [exerciseBreakdown]);
+
+  const ratingTrend = useMemo(() => {
+    return filteredLogs
+      .filter(l => l.self_rating != null)
+      .slice(-20)
+      .map(l => l.self_rating!);
+  }, [filteredLogs]);
+
+  const insights = useMemo(() => {
+    const msgs: { type: 'positive' | 'warning' | 'info'; text: string }[] = [];
+
+    if (stats.currentStreak >= 3) {
+      msgs.push({ type: 'positive', text: `Great streak! ${stats.currentStreak} consecutive days active. 連續 ${stats.currentStreak} 天活躍！` });
+    } else if (stats.currentStreak === 0 && stats.daysActive > 0) {
+      msgs.push({ type: 'warning', text: 'Streak broken — consider encouraging patient to resume. 連續紀錄中斷，請鼓勵患者恢復訓練。' });
+    }
+
+    if (stats.avgRating >= 7) {
+      msgs.push({ type: 'positive', text: `Patient feels positive (avg rating ${stats.avgRating.toFixed(1)}/10). 患者感覺良好。` });
+    } else if (stats.avgRating > 0 && stats.avgRating < 5) {
+      msgs.push({ type: 'warning', text: `Low self-rating (${stats.avgRating.toFixed(1)}/10) — consider adjusting difficulty. 自評偏低，考慮調整難度。` });
+    }
+
+    if (stats.exercisesPerDay < 1 && stats.logCount > 0) {
+      msgs.push({ type: 'warning', text: `Low compliance (${stats.exercisesPerDay.toFixed(1)} exercises/day). Review exercise plan. 訓練頻率偏低，請檢視計劃。` });
+    } else if (stats.exercisesPerDay >= 3) {
+      msgs.push({ type: 'positive', text: `Strong compliance (${stats.exercisesPerDay.toFixed(1)} exercises/day). 訓練頻率良好。` });
+    }
+
+    if (exerciseBreakdown.length > 0) {
+      msgs.push({ type: 'info', text: `Most practiced: "${exerciseBreakdown[0].name}" (${exerciseBreakdown[0].count}×). 最常練習：「${exerciseBreakdown[0].name}」` });
+    }
+
+    if (msgs.length === 0) {
+      msgs.push({ type: 'info', text: 'Not enough data for insights yet. 目前資料不足以產生分析。' });
+    }
+
+    return msgs;
+  }, [stats, exerciseBreakdown]);
+
+  const recentLogs = useMemo(() => {
+    return [...filteredLogs].reverse().slice(0, 15);
+  }, [filteredLogs]);
 
   const patient = patientQuery.data;
-  const stats = allSessionsStatsQuery.data;
-  const sessions = sessionsQuery.data || [];
-  const programs = programsQuery.data || [];
-  const assessments = assessmentsQuery.data || [];
+  const isLoading = patientQuery.isLoading || exerciseLogsQuery.isLoading || appSessionsQuery.isLoading;
 
-  const durationFormatted = useMemo(() => {
-    if (!stats) return '0m';
-    const totalMin = Math.round(stats.totalDuration / 60);
-    const hrs = Math.floor(totalMin / 60);
-    const mins = totalMin % 60;
-    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-  }, [stats]);
-
-  const isLoading = patientQuery.isLoading;
-
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     void patientQuery.refetch();
-    void sessionsQuery.refetch();
-    void allSessionsStatsQuery.refetch();
-    void programsQuery.refetch();
-    void assessmentsQuery.refetch();
-  };
+    void exerciseLogsQuery.refetch();
+    void appSessionsQuery.refetch();
+    void questionnaireQuery.refetch();
+  }, [patientQuery, exerciseLogsQuery, appSessionsQuery, questionnaireQuery]);
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="large" color={RESEARCH_GREEN} />
+        <ActivityIndicator size="large" color={ACCENT} />
+        <Text style={styles.loadingText}>Loading dashboard... 載入儀表板...</Text>
       </View>
     );
   }
@@ -235,9 +406,9 @@ export default function PatientDashboardScreen() {
     return (
       <View style={styles.loadingContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Text style={styles.errorText}>Patient not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back 返回</Text>
+        <Text style={styles.errorText}>Patient not found 找不到患者</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>Go Back 返回</Text>
         </TouchableOpacity>
       </View>
     );
@@ -247,22 +418,29 @@ export default function PatientDashboardScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn} activeOpacity={0.7}>
-          <ChevronLeft size={22} color={Colors.white} />
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack} activeOpacity={0.7}>
+          <ChevronLeft size={22} color="#FFF" />
         </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName} numberOfLines={1}>{patient.patient_name}</Text>
-          <View style={styles.headerMetaRow}>
-            <Text style={styles.headerCode}>{patient.access_code}</Text>
-            {patient.is_research_participant && (
-              <View style={styles.researchBadge}>
-                <FlaskConical size={10} color={Colors.white} />
-                <Text style={styles.researchBadgeText}>Research</Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Clinical Dashboard 臨床儀表板</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>{patient.patient_name} · {patient.access_code}</Text>
         </View>
+      </View>
+
+      <View style={styles.periodBar}>
+        {PERIOD_OPTIONS.map(opt => (
+          <TouchableOpacity
+            key={opt.key}
+            style={[styles.periodBtn, period === opt.key && styles.periodBtnActive]}
+            onPress={() => setPeriod(opt.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.periodBtnText, period === opt.key && styles.periodBtnTextActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <ScrollView
@@ -271,231 +449,599 @@ export default function PatientDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={patientQuery.isRefetching}
+            refreshing={patientQuery.isRefetching || exerciseLogsQuery.isRefetching}
             onRefresh={handleRefresh}
-            tintColor={RESEARCH_GREEN}
+            tintColor={ACCENT}
           />
         }
       >
         <View style={styles.statsGrid}>
-          <StatCard icon={<Activity size={16} color={RESEARCH_GREEN} />} value={String(stats?.totalCount || 0)} label="Sessions 訓練" />
-          <StatCard icon={<BarChart3 size={16} color={RESEARCH_GREEN} />} value={`${Math.round(stats?.avgCompletion || 0)}%`} label="Avg Rate 平均率" />
-          <StatCard icon={<Clock size={16} color={RESEARCH_GREEN} />} value={durationFormatted} label="Duration 時長" />
-          <StatCard icon={<CalendarDays size={16} color={RESEARCH_GREEN} />} value={String(stats?.uniqueDays || 0)} label="Days 天數" />
+          <StatCard
+            icon={<Activity size={16} color={ACCENT} />}
+            value={String(stats.sessionCount)}
+            sub={`avg ${formatDuration(stats.avgSessionLength)}`}
+            label="App Sessions 應用次數"
+            bg={ACCENT_BG}
+          />
+          <StatCard
+            icon={<Dumbbell size={16} color="#7C3AED" />}
+            value={String(stats.logCount)}
+            sub={`${stats.exercisesPerDay.toFixed(1)}/day`}
+            label="Exercises 運動次數"
+            bg="#F5F3FF"
+          />
+          <StatCard
+            icon={<TrendingUp size={16} color="#0284C7" />}
+            value={stats.avgRating > 0 ? stats.avgRating.toFixed(1) : '—'}
+            sub="out of 10"
+            label="Avg Rating 平均自評"
+            bg="#F0F9FF"
+          />
+          <StatCard
+            icon={<Star size={16} color="#D97706" />}
+            value={String(stats.totalStars)}
+            sub="earned"
+            label="Stars 星星"
+            bg="#FFFBEB"
+          />
+          <StatCard
+            icon={<Flame size={16} color="#DC2626" />}
+            value={`${stats.daysActive}d`}
+            sub={`${stats.currentStreak}🔥 / ${stats.longestStreak} best`}
+            label="Active Days 活躍天數"
+            bg="#FEF2F2"
+          />
+          <StatCard
+            icon={<Clock size={16} color={WARM} />}
+            value={`${stats.totalPracticeMinutes}m`}
+            sub="total"
+            label="Practice Time 練習時間"
+            bg="#FFF7ED"
+          />
         </View>
 
-        {programs.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Programs 訓練計劃</Text>
-            {programs.map(p => {
-              const isExpired = p.expiry_date ? new Date(p.expiry_date) < new Date() : false;
-              const exCount = Array.isArray(p.exercises) ? p.exercises.length : 0;
-              return (
-                <View key={p.id} style={styles.programCard}>
-                  <View style={styles.programHeader}>
-                    <Text style={styles.programName} numberOfLines={1}>{p.name || 'Unnamed'}</Text>
-                    <View style={[styles.programStatusBadge, {
-                      backgroundColor: p.is_active && !isExpired ? '#E8F5EE' : Colors.frozenLight,
-                    }]}>
-                      <Text style={[styles.programStatusText, {
-                        color: p.is_active && !isExpired ? RESEARCH_GREEN : Colors.frozen,
-                      }]}>
-                        {isExpired ? 'Expired' : p.is_active ? 'Active' : 'Inactive'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.programMeta}>
-                    <Text style={styles.programMetaText}>{p.schedule_type || 'daily'}</Text>
-                    <Text style={styles.programMetaText}>{exCount} exercises</Text>
-                    {p.issue_date && <Text style={styles.programMetaText}>{p.issue_date} → {p.expiry_date || '—'}</Text>}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {sessions.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Sessions 最近訓練</Text>
-            {sessions.map(s => {
-              const date = s.session_start ? new Date(s.session_start).toLocaleDateString() : s.session_date || '—';
-              const pStr = `${s.prescribed_sets || 0}×${s.prescribed_reps || 0}`;
-              const cStr = `${s.completed_sets || 0}×${s.completed_reps || 0}`;
-              const durMin = s.duration_seconds ? Math.round(s.duration_seconds / 60) : 0;
-              const rate = s.completion_rate ? Math.round(s.completion_rate) : 0;
-              return (
-                <View key={s.id} style={styles.sessionCard}>
-                  <View style={styles.sessionRow}>
-                    <Text style={styles.sessionDate}>{date}</Text>
-                    <Text style={[styles.sessionRate, { color: rate >= 80 ? Colors.success : rate >= 50 ? Colors.warning : Colors.danger }]}>
-                      {rate}%
-                    </Text>
-                  </View>
-                  <Text style={styles.sessionExercise} numberOfLines={1}>{s.exercise_title_en || 'Unknown'}</Text>
-                  <View style={styles.sessionMeta}>
-                    <Text style={styles.sessionMetaText}>{pStr} → {cStr}</Text>
-                    {durMin > 0 && <Text style={styles.sessionMetaText}>{durMin}m</Text>}
-                    {s.self_rating != null && <Text style={styles.sessionMetaText}>⭐ {s.self_rating}/10</Text>}
-                    {s.video_recorded && (
-                      <View style={styles.videoBadge}>
-                        <Video size={10} color={Colors.info} />
+        <SectionHeader icon={<BarChart3 size={16} color={ACCENT} />} title="Daily Activity (14 days) 每日活動" />
+        <View style={styles.chartCard}>
+          {dailyActivity.every(d => d.count === 0) ? (
+            <View style={styles.emptyChart}>
+              <Calendar size={24} color={Colors.textTertiary} />
+              <Text style={styles.emptyChartText}>No activity data 無活動資料</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.barChart}>
+                {dailyActivity.map((day, i) => {
+                  const height = Math.max(4, (day.count / maxDailyCount) * 100);
+                  const isToday = i === dailyActivity.length - 1;
+                  return (
+                    <View key={day.date} style={styles.barCol}>
+                      <Text style={styles.barValue}>{day.count > 0 ? day.count : ''}</Text>
+                      <View style={styles.barTrack}>
+                        <View
+                          style={[
+                            styles.bar,
+                            {
+                              height: `${height}%` as unknown as number,
+                              backgroundColor: isToday ? WARM : day.count > 0 ? ACCENT : '#E5E7EB',
+                            },
+                          ]}
+                        />
                       </View>
-                    )}
+                      <Text style={[styles.barLabel, isToday && styles.barLabelToday]}>{day.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
+        </View>
+
+        {exerciseBreakdown.length > 0 && (
+          <>
+            <SectionHeader icon={<Dumbbell size={16} color="#7C3AED" />} title="Top Exercises 熱門運動" />
+            <View style={styles.card}>
+              {exerciseBreakdown.map((ex, idx) => (
+                <View key={ex.name} style={[styles.exerciseRow, idx < exerciseBreakdown.length - 1 && styles.exerciseRowBorder]}>
+                  <View style={styles.exerciseInfo}>
+                    <View style={styles.exerciseRank}>
+                      <Text style={styles.exerciseRankText}>{idx + 1}</Text>
+                    </View>
+                    <Text style={styles.exerciseName} numberOfLines={1}>{ex.name}</Text>
+                    <Text style={styles.exerciseCount}>{ex.count}</Text>
+                  </View>
+                  <View style={styles.exerciseBarTrack}>
+                    <View
+                      style={[
+                        styles.exerciseBar,
+                        { width: `${(ex.count / maxExerciseCount) * 100}%` as unknown as number },
+                      ]}
+                    />
                   </View>
                 </View>
-              );
-            })}
-          </View>
+              ))}
+            </View>
+          </>
         )}
 
-        {assessments.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Assessments 評估</Text>
-            {assessments.map(a => (
-              <View key={a.id} style={styles.assessmentCard}>
-                <View style={styles.assessmentRow}>
-                  <View style={[styles.timepointDot, { backgroundColor: getTimepointColor(a.timepoint) }]} />
-                  <Text style={styles.assessmentName}>{a.assessment_name || '—'}</Text>
-                  <Text style={styles.assessmentScore}>{a.total_score ?? '—'}</Text>
+        {ratingTrend.length > 0 && (
+          <>
+            <SectionHeader icon={<TrendingUp size={16} color="#0284C7" />} title="Self-Rating Trend 自評趨勢" />
+            <View style={styles.chartCard}>
+              <View style={styles.ratingChart}>
+                {ratingTrend.map((rating, i) => {
+                  const height = Math.max(4, (rating / 10) * 80);
+                  const color = rating >= 7 ? '#10B981' : rating >= 5 ? '#F59E0B' : '#EF4444';
+                  return (
+                    <View key={`r-${i}`} style={styles.ratingBarCol}>
+                      <View style={styles.ratingBarTrack}>
+                        <View style={[styles.ratingBar, { height, backgroundColor: color }]} />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={styles.ratingLegend}>
+                <View style={styles.ratingLegendItem}>
+                  <View style={[styles.ratingDot, { backgroundColor: '#10B981' }]} />
+                  <Text style={styles.ratingLegendText}>7-10</Text>
                 </View>
-                <View style={styles.assessmentMeta}>
-                  <Text style={styles.assessmentTimepoint}>{a.timepoint || '—'}</Text>
-                  <Text style={styles.assessmentDate}>{a.administered_date || '—'}</Text>
+                <View style={styles.ratingLegendItem}>
+                  <View style={[styles.ratingDot, { backgroundColor: '#F59E0B' }]} />
+                  <Text style={styles.ratingLegendText}>5-6</Text>
+                </View>
+                <View style={styles.ratingLegendItem}>
+                  <View style={[styles.ratingDot, { backgroundColor: '#EF4444' }]} />
+                  <Text style={styles.ratingLegendText}>1-4</Text>
                 </View>
               </View>
-            ))}
-          </View>
-        )}
-
-        {patient.is_research_participant && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Research Info 研究資料</Text>
-            <View style={styles.researchInfoCard}>
-              {patient.research_cohort && (
-                <View style={styles.researchInfoRow}>
-                  <Text style={styles.researchLabel}>Cohort 組別</Text>
-                  <View style={styles.cohortBadge}>
-                    <Text style={styles.cohortBadgeText}>{getCohortLabel(patient.research_cohort)}</Text>
-                  </View>
-                </View>
-              )}
-              {patient.research_participant_code && (
-                <View style={styles.researchInfoRow}>
-                  <Text style={styles.researchLabel}>Code 代碼</Text>
-                  <Text style={styles.researchValue}>{patient.research_participant_code}</Text>
-                </View>
-              )}
-              {patient.research_consent_date && (
-                <View style={styles.researchInfoRow}>
-                  <Text style={styles.researchLabel}>Consent 同意日期</Text>
-                  <Text style={styles.researchValue}>{patient.research_consent_date}</Text>
-                </View>
-              )}
-              {patient.research_baseline_date && (
-                <View style={styles.researchInfoRow}>
-                  <Text style={styles.researchLabel}>Baseline 基線</Text>
-                  <Text style={styles.researchValue}>{patient.research_baseline_date}</Text>
-                </View>
-              )}
-              {patient.research_endpoint_date && (
-                <View style={styles.researchInfoRow}>
-                  <Text style={styles.researchLabel}>Endpoint 終點</Text>
-                  <Text style={styles.researchValue}>{patient.research_endpoint_date}</Text>
-                </View>
-              )}
             </View>
+          </>
+        )}
+
+        <SectionHeader icon={<Brain size={16} color={WARM} />} title="Clinical Insights 臨床觀察" />
+        <View style={styles.card}>
+          {insights.map((insight, i) => (
+            <View key={`insight-${i}`} style={[styles.insightRow, i < insights.length - 1 && styles.insightRowBorder]}>
+              {insight.type === 'positive' ? (
+                <CheckCircle2 size={18} color="#10B981" />
+              ) : insight.type === 'warning' ? (
+                <AlertTriangle size={18} color="#F59E0B" />
+              ) : (
+                <ThumbsUp size={18} color="#6366F1" />
+              )}
+              <Text style={styles.insightText}>{insight.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        {allQuestionnaires.length > 0 && (
+          <>
+            <SectionHeader icon={<ClipboardList size={16} color="#059669" />} title="Assessment History 評估歷史" />
+            <View style={styles.card}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Assessment 評估</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'center' as const }]}>Score 分數</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'right' as const }]}>Date 日期</Text>
+              </View>
+              {allQuestionnaires.slice(0, 10).map((q, idx) => (
+                <View key={q.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                  <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>
+                    {q.questionnaire_templates?.name || '—'}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 1, textAlign: 'center' as const, fontWeight: '700' as const, color: ACCENT }]}>
+                    {q.total_score ?? '—'}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 1, textAlign: 'right' as const }]}>
+                    {formatFullDate(q.created_at)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {recentLogs.length > 0 && (
+          <>
+            <SectionHeader icon={<Zap size={16} color="#DC2626" />} title="Recent Exercise Logs 最近訓練紀錄" />
+            <View style={styles.card}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Date 日期</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Exercise 運動</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: 'center' as const }]}>Rating</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.5, textAlign: 'center' as const }]}>⭐</Text>
+              </View>
+              {recentLogs.map((log, idx) => (
+                <View key={log.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{formatDate(log.completed_at)}</Text>
+                  <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>
+                    {log.title_en || log.exercise_title || '—'}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'center' as const }]}>
+                    {log.self_rating != null ? (
+                      <Text style={{ color: log.self_rating >= 7 ? '#10B981' : log.self_rating >= 5 ? '#F59E0B' : '#EF4444', fontWeight: '600' as const }}>
+                        {log.self_rating}
+                      </Text>
+                    ) : '—'}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 0.5, textAlign: 'center' as const }]}>
+                    {log.stars_earned ?? 0}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {filteredLogs.length === 0 && filteredSessions.length === 0 && (
+          <View style={styles.emptyState}>
+            <BarChart3 size={40} color={Colors.textTertiary} />
+            <Text style={styles.emptyStateTitle}>No data for this period 此期間無資料</Text>
+            <Text style={styles.emptyStateText}>Try selecting a longer period or check if the patient has used the app.</Text>
           </View>
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: insets.bottom + 30 }} />
       </ScrollView>
     </View>
   );
 }
 
-function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function StatCard({ icon, value, sub, label, bg }: {
+  icon: React.ReactNode;
+  value: string;
+  sub: string;
+  label: string;
+  bg: string;
+}) {
   return (
-    <View style={styles.statCard}>
-      {icon}
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={[styles.statCard, { backgroundColor: bg }]}>
+      <View style={styles.statCardTop}>
+        {icon}
+        <Text style={styles.statValue}>{value}</Text>
+      </View>
+      <Text style={styles.statSub}>{sub}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      {icon}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F0ED' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F0ED', gap: 12 },
+  container: { flex: 1, backgroundColor: PAGE_BG },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: PAGE_BG, gap: 12 },
+  loadingText: { fontSize: 14, color: Colors.textSecondary },
   errorText: { fontSize: 15, color: Colors.danger },
-  backButton: { backgroundColor: RESEARCH_GREEN, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
-  backButtonText: { color: Colors.white, fontWeight: '600' as const },
-  headerBar: {
-    backgroundColor: RESEARCH_GREEN, paddingHorizontal: 16, paddingBottom: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+  backBtn: { backgroundColor: ACCENT, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+  backBtnText: { color: '#FFF', fontWeight: '600' as const },
+
+  header: {
+    backgroundColor: ACCENT,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  headerBackBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)',
+  headerBack: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
-  headerInfo: { flex: 1 },
-  headerName: { fontSize: 20, fontWeight: '700' as const, color: Colors.white },
-  headerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  headerCode: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  researchBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+  headerContent: { flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: '700' as const, color: '#FFF' },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+
+  periodBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  researchBadgeText: { fontSize: 10, fontWeight: '600' as const, color: Colors.white },
+  periodBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  periodBtnActive: {
+    backgroundColor: ACCENT,
+  },
+  periodBtnText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  periodBtnTextActive: {
+    color: '#FFF',
+  },
+
   scroll: { flex: 1 },
-  scrollContent: { padding: 16 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  scrollContent: { padding: 16, gap: 4 },
+
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 8,
+  },
   statCard: {
-    width: '48%' as unknown as number, backgroundColor: Colors.white, borderRadius: 14, padding: 14, gap: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    width: '47.5%' as unknown as number,
+    borderRadius: 14,
+    padding: 14,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
   },
-  statValue: { fontSize: 22, fontWeight: '800' as const, color: Colors.text },
-  statLabel: { fontSize: 11, color: Colors.textTertiary, fontWeight: '500' as const },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '700' as const, color: Colors.text, marginBottom: 10 },
-  programCard: {
-    backgroundColor: Colors.white, borderRadius: 12, padding: 14, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  statCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  programHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  programName: { fontSize: 15, fontWeight: '600' as const, color: Colors.text, flex: 1, marginRight: 8 },
-  programStatusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  programStatusText: { fontSize: 11, fontWeight: '600' as const },
-  programMeta: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  programMetaText: { fontSize: 12, color: Colors.textSecondary },
-  sessionCard: {
-    backgroundColor: Colors.white, borderRadius: 12, padding: 12, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1,
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: Colors.text,
   },
-  sessionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sessionDate: { fontSize: 12, fontWeight: '600' as const, color: Colors.textSecondary },
-  sessionRate: { fontSize: 14, fontWeight: '800' as const },
-  sessionExercise: { fontSize: 14, fontWeight: '500' as const, color: Colors.text, marginTop: 4 },
-  sessionMeta: { flexDirection: 'row', gap: 10, marginTop: 6, alignItems: 'center' },
-  sessionMetaText: { fontSize: 11, color: Colors.textTertiary },
-  videoBadge: { backgroundColor: Colors.infoLight, borderRadius: 4, padding: 3 },
-  assessmentCard: {
-    backgroundColor: Colors.white, borderRadius: 12, padding: 12, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1,
+  statSub: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    fontWeight: '500' as const,
+    marginTop: 1,
   },
-  assessmentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timepointDot: { width: 10, height: 10, borderRadius: 5 },
-  assessmentName: { flex: 1, fontSize: 14, fontWeight: '600' as const, color: Colors.text },
-  assessmentScore: { fontSize: 16, fontWeight: '800' as const, color: RESEARCH_GREEN },
-  assessmentMeta: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  assessmentTimepoint: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' as const },
-  assessmentDate: { fontSize: 12, color: Colors.textTertiary },
-  researchInfoCard: {
-    backgroundColor: RESEARCH_GREEN_LIGHT, borderRadius: 14, padding: 16, gap: 10,
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+    marginTop: 4,
   },
-  researchInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  researchLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const },
-  researchValue: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
-  cohortBadge: { backgroundColor: RESEARCH_GREEN, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  cohortBadgeText: { fontSize: 12, fontWeight: '600' as const, color: Colors.white },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  chartCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+
+  emptyChart: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 8,
+  },
+  emptyChartText: { fontSize: 13, color: Colors.textTertiary },
+
+  barChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 130,
+    gap: 2,
+  },
+  barCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
+  barValue: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: Colors.textTertiary,
+    height: 14,
+  },
+  barTrack: {
+    flex: 1,
+    width: '80%' as unknown as number,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 4,
+    minHeight: 4,
+  },
+  barLabel: {
+    fontSize: 8,
+    color: Colors.textTertiary,
+    fontWeight: '500' as const,
+  },
+  barLabelToday: {
+    color: WARM,
+    fontWeight: '700' as const,
+  },
+
+  exerciseRow: {
+    paddingVertical: 10,
+    gap: 6,
+  },
+  exerciseRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  exerciseInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  exerciseRank: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseRankText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#7C3AED',
+  },
+  exerciseName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.text,
+  },
+  exerciseCount: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  exerciseBarTrack: {
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginLeft: 32,
+  },
+  exerciseBar: {
+    height: '100%',
+    backgroundColor: '#7C3AED',
+    borderRadius: 3,
+  },
+
+  ratingChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 90,
+    gap: 3,
+  },
+  ratingBarCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  ratingBarTrack: {
+    width: '70%' as unknown as number,
+    height: 80,
+    justifyContent: 'flex-end',
+  },
+  ratingBar: {
+    width: '100%',
+    borderRadius: 3,
+    minHeight: 4,
+  },
+  ratingLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 10,
+  },
+  ratingLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  ratingLegendText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '500' as const,
+  },
+
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  insightRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  insightText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.text,
+    lineHeight: 19,
+  },
+
+  tableHeader: {
+    flexDirection: 'row',
+    paddingBottom: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#E5E7EB',
+    marginBottom: 2,
+  },
+  tableHeaderCell: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase' as const,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+  },
+  tableRowAlt: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 6,
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
+  },
+  tableCell: {
+    fontSize: 12,
+    color: Colors.text,
+  },
+
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  emptyStateText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 30,
+  },
 });
