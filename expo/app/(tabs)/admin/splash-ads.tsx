@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,10 @@ import {
   Megaphone,
   ImageIcon,
   Calendar,
+  Users,
+  Check,
+  Square,
+  CheckSquare,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -47,12 +51,26 @@ interface SplashAd {
   created_at: string;
 }
 
-const TARGET_TYPES = ['all', 'new_user', 'returning'] as const;
+interface PatientOption {
+  id: string;
+  patient_name: string;
+}
+
+interface SplashAdTarget {
+  id: string;
+  splash_ad_id: string;
+  patient_id: string;
+  created_at: string;
+  patients?: { patient_name: string } | null;
+}
+
+const TARGET_TYPES = ['all', 'new_user', 'returning', 'specific'] as const;
 
 function getTargetColor(t: string) {
   switch (t) {
     case 'new_user': return Colors.info;
     case 'returning': return '#7C5CFC';
+    case 'specific': return '#E07A3A';
     default: return Colors.success;
   }
 }
@@ -74,6 +92,7 @@ export default function SplashAdsScreen() {
   const [endDate, setEndDate] = useState('');
   const [sortOrder, setSortOrder] = useState('0');
   const [isActive, setIsActive] = useState(true);
+  const [selectedPatientIds, setSelectedPatientIds] = useState<string[]>([]);
 
   const adsQuery = useQuery({
     queryKey: ['admin-splash-ads'],
@@ -93,6 +112,70 @@ export default function SplashAdsScreen() {
     enabled: isAdmin,
   });
 
+  const patientsQuery = useQuery({
+    queryKey: ['admin-patients-list'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('id, patient_name')
+          .order('patient_name');
+        if (error) throw error;
+        return (data || []) as PatientOption[];
+      } catch (e) {
+        console.log('Error fetching patients:', e);
+        return [];
+      }
+    },
+    enabled: isAdmin,
+  });
+
+  const targetCountsQuery = useQuery({
+    queryKey: ['admin-splash-ad-target-counts'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('splash_ad_targets')
+          .select('splash_ad_id');
+        if (error) throw error;
+        const counts: Record<string, number> = {};
+        (data || []).forEach((row: { splash_ad_id: string }) => {
+          counts[row.splash_ad_id] = (counts[row.splash_ad_id] || 0) + 1;
+        });
+        return counts;
+      } catch (e) {
+        console.log('Error fetching target counts:', e);
+        return {} as Record<string, number>;
+      }
+    },
+    enabled: isAdmin,
+  });
+
+  const existingTargetsQuery = useQuery({
+    queryKey: ['admin-splash-ad-targets', editingId],
+    queryFn: async () => {
+      if (!editingId) return [];
+      try {
+        const { data, error } = await supabase
+          .from('splash_ad_targets')
+          .select('*, patients(patient_name)')
+          .eq('splash_ad_id', editingId);
+        if (error) throw error;
+        return (data || []) as SplashAdTarget[];
+      } catch (e) {
+        console.log('Error fetching existing targets:', e);
+        return [];
+      }
+    },
+    enabled: !!editingId && modalVisible,
+  });
+
+  useEffect(() => {
+    if (editingId && existingTargetsQuery.data) {
+      setSelectedPatientIds(existingTargetsQuery.data.map(t => t.patient_id));
+    }
+  }, [editingId, existingTargetsQuery.data]);
+
   const filtered = useMemo(() => {
     if (!adsQuery.data) return [];
     if (!search.trim()) return adsQuery.data;
@@ -111,6 +194,7 @@ export default function SplashAdsScreen() {
     setEndDate('');
     setSortOrder('0');
     setIsActive(true);
+    setSelectedPatientIds([]);
   }, []);
 
   const openNew = useCallback(() => {
@@ -129,12 +213,31 @@ export default function SplashAdsScreen() {
     setEndDate(ad.end_date || '');
     setSortOrder(String(ad.sort_order ?? 0));
     setIsActive(ad.is_active ?? true);
+    setSelectedPatientIds([]);
     setModalVisible(true);
+  }, []);
+
+  const togglePatient = useCallback((pid: string) => {
+    setSelectedPatientIds(prev =>
+      prev.includes(pid) ? prev.filter(id => id !== pid) : [...prev, pid]
+    );
+  }, []);
+
+  const selectAllPatients = useCallback(() => {
+    if (!patientsQuery.data) return;
+    setSelectedPatientIds(patientsQuery.data.map(p => p.id));
+  }, [patientsQuery.data]);
+
+  const deselectAllPatients = useCallback(() => {
+    setSelectedPatientIds([]);
   }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!title.trim()) throw new Error('Title is required');
+      if (targetType === 'specific' && selectedPatientIds.length === 0) {
+        throw new Error('Please select at least one patient for specific targeting');
+      }
       const payload: Record<string, unknown> = {
         title: title.trim(),
         image_url: imageUrl.trim(),
@@ -146,16 +249,44 @@ export default function SplashAdsScreen() {
         sort_order: parseInt(sortOrder, 10) || 0,
         is_active: isActive,
       };
+
+      let adId = editingId;
+
       if (editingId) {
         const { error } = await supabase.from('splash_ads').update(payload).eq('id', editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('splash_ads').insert(payload);
+        const { data, error } = await supabase.from('splash_ads').insert(payload).select('id').single();
         if (error) throw error;
+        adId = data.id;
+      }
+
+      if (targetType === 'specific' && adId) {
+        const { error: delError } = await supabase
+          .from('splash_ad_targets')
+          .delete()
+          .eq('splash_ad_id', adId);
+        if (delError) console.log('Error clearing old targets:', delError);
+
+        const rows = selectedPatientIds.map(pid => ({
+          splash_ad_id: adId as string,
+          patient_id: pid,
+        }));
+        const { error: insError } = await supabase
+          .from('splash_ad_targets')
+          .insert(rows);
+        if (insError) throw insError;
+      } else if (targetType !== 'specific' && adId) {
+        await supabase
+          .from('splash_ad_targets')
+          .delete()
+          .eq('splash_ad_id', adId);
       }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-splash-ads'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-splash-ad-target-counts'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-splash-ad-targets'] });
       setModalVisible(false);
     },
     onError: (error: Error) => {
@@ -165,11 +296,13 @@ export default function SplashAdsScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      await supabase.from('splash_ad_targets').delete().eq('splash_ad_id', id);
       const { error } = await supabase.from('splash_ads').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-splash-ads'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-splash-ad-target-counts'] });
     },
     onError: (error: Error) => {
       Alert.alert('Error', error.message);
@@ -191,6 +324,8 @@ export default function SplashAdsScreen() {
       </View>
     );
   }
+
+  const targetCounts = targetCountsQuery.data || {};
 
   return (
     <View style={styles.container}>
@@ -226,7 +361,7 @@ export default function SplashAdsScreen() {
         style={styles.list}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={adsQuery.isFetching} onRefresh={() => void adsQuery.refetch()} tintColor={Colors.accent} />
+          <RefreshControl refreshing={adsQuery.isFetching} onRefresh={() => { void adsQuery.refetch(); void targetCountsQuery.refetch(); }} tintColor={Colors.accent} />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -257,8 +392,14 @@ export default function SplashAdsScreen() {
                 </View>
                 <View style={styles.cardMeta}>
                   <View style={[styles.targetBadge, { backgroundColor: getTargetColor(ad.target_type) + '18' }]}>
-                    <Text style={[styles.targetBadgeText, { color: getTargetColor(ad.target_type) }]}>{ad.target_type}</Text>
+                    <Text style={[styles.targetBadgeText, { color: getTargetColor(ad.target_type) }]}>{ad.target_type.replace('_', ' ')}</Text>
                   </View>
+                  {ad.target_type === 'specific' && targetCounts[ad.id] != null && (
+                    <View style={styles.targetCountBadge}>
+                      <Users size={10} color={Colors.textSecondary} />
+                      <Text style={styles.targetCountText}>{targetCounts[ad.id]}</Text>
+                    </View>
+                  )}
                   <View style={[styles.statusDot, { backgroundColor: ad.is_active ? Colors.success : Colors.frozen }]} />
                   <Text style={styles.statusLabel}>{ad.is_active ? 'Active' : 'Inactive'}</Text>
                 </View>
@@ -325,6 +466,49 @@ export default function SplashAdsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {targetType === 'specific' && (
+                <View style={styles.patientSection}>
+                  <View style={styles.patientSectionHeader}>
+                    <Text style={styles.patientSectionTitle}>Select Patients 選擇患者</Text>
+                    <Text style={styles.patientSectionCount}>{selectedPatientIds.length} selected</Text>
+                  </View>
+                  <View style={styles.selectAllRow}>
+                    <TouchableOpacity style={styles.selectAllBtn} onPress={selectAllPatients}>
+                      <CheckSquare size={14} color={Colors.accent} />
+                      <Text style={styles.selectAllText}>Select All 全選</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.selectAllBtn} onPress={deselectAllPatients}>
+                      <Square size={14} color={Colors.textTertiary} />
+                      <Text style={styles.deselectAllText}>Deselect 取消全選</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {patientsQuery.isLoading ? (
+                    <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: 12 }} />
+                  ) : (
+                    <View style={styles.patientList}>
+                      {(patientsQuery.data || []).map(p => {
+                        const isSelected = selectedPatientIds.includes(p.id);
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[styles.patientRow, isSelected && styles.patientRowSelected]}
+                            onPress={() => togglePatient(p.id)}
+                            activeOpacity={0.7}
+                          >
+                            {isSelected ? (
+                              <Check size={16} color={Colors.accent} />
+                            ) : (
+                              <View style={styles.uncheckedBox} />
+                            )}
+                            <Text style={[styles.patientName, isSelected && { color: Colors.text, fontWeight: '600' as const }]}>{p.patient_name}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
 
               <Text style={styles.fieldLabel}>Start Date 開始日期 (YYYY-MM-DD)</Text>
               <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="2025-01-01" placeholderTextColor={Colors.textTertiary} />
@@ -401,6 +585,8 @@ const styles = StyleSheet.create({
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   targetBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   targetBadgeText: { fontSize: 11, fontWeight: '600' as const, textTransform: 'capitalize' as const },
+  targetCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.surfaceSecondary, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  targetCountText: { fontSize: 11, fontWeight: '600' as const, color: Colors.textSecondary },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusLabel: { fontSize: 12, color: Colors.textSecondary },
   cardDateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -482,5 +668,55 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   switchLabel: { fontSize: 15, fontWeight: '500' as const, color: Colors.text },
+  patientSection: {
+    marginTop: 14,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  patientSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  patientSectionTitle: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
+  patientSectionCount: { fontSize: 12, fontWeight: '600' as const, color: Colors.accent },
+  selectAllRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  selectAllText: { fontSize: 13, color: Colors.accent, fontWeight: '500' as const },
+  deselectAllText: { fontSize: 13, color: Colors.textTertiary, fontWeight: '500' as const },
+  patientList: { maxHeight: 260 },
+  patientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  patientRowSelected: {
+    backgroundColor: Colors.accent + '08',
+  },
+  uncheckedBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  patientName: { fontSize: 14, color: Colors.textSecondary },
 });
-
