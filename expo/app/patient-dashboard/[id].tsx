@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Platform,
   Animated,
+  TextInput,
+  FlatList,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +30,11 @@ import {
   ClipboardList,
   Dumbbell,
   Brain,
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  FileText,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +77,7 @@ interface PatientInfo {
 }
 
 const ACCENT = '#0F766E';
+const PAGE_SIZE = 30;
 const ACCENT_LIGHT = '#CCFBF1';
 const ACCENT_BG = '#F0FDFA';
 const WARM = '#E07A3A';
@@ -129,11 +137,28 @@ function formatFullDate(dateStr?: string): string {
   }
 }
 
+function formatDateTime(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${date} ${time}`;
+  } catch {
+    return '—';
+  }
+}
+
 export default function ClinicalDashboardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<PeriodFilter>('30d');
+  const [logsExpanded, setLogsExpanded] = useState<boolean>(false);
+  const [logsSearch, setLogsSearch] = useState<string>('');
+  const [logsDateFrom, setLogsDateFrom] = useState<string>('');
+  const [logsDateTo, setLogsDateTo] = useState<string>('');
+  const [logsDisplayCount, setLogsDisplayCount] = useState<number>(PAGE_SIZE);
 
   const patientQuery = useQuery({
     queryKey: ['clinical-dashboard-patient', id],
@@ -381,6 +406,48 @@ export default function ClinicalDashboardScreen() {
   const recentLogs = useMemo(() => {
     return [...filteredLogs].reverse().slice(0, 15);
   }, [filteredLogs]);
+
+  const fullLogsFiltered = useMemo(() => {
+    let logs = [...allLogs].reverse();
+    if (logsSearch.trim()) {
+      const q = logsSearch.trim().toLowerCase();
+      logs = logs.filter(l =>
+        (l.title_en || l.exercise_title || '').toLowerCase().includes(q)
+      );
+    }
+    if (logsDateFrom) {
+      const from = new Date(logsDateFrom);
+      from.setHours(0, 0, 0, 0);
+      if (!isNaN(from.getTime())) {
+        logs = logs.filter(l => l.completed_at && new Date(l.completed_at) >= from);
+      }
+    }
+    if (logsDateTo) {
+      const to = new Date(logsDateTo);
+      to.setHours(23, 59, 59, 999);
+      if (!isNaN(to.getTime())) {
+        logs = logs.filter(l => l.completed_at && new Date(l.completed_at) <= to);
+      }
+    }
+    return logs;
+  }, [allLogs, logsSearch, logsDateFrom, logsDateTo]);
+
+  const logsToShow = useMemo(() => {
+    return fullLogsFiltered.slice(0, logsDisplayCount);
+  }, [fullLogsFiltered, logsDisplayCount]);
+
+  const hasMoreLogs = fullLogsFiltered.length > logsDisplayCount;
+
+  const handleLoadMoreLogs = useCallback(() => {
+    setLogsDisplayCount(prev => prev + PAGE_SIZE);
+  }, []);
+
+  const handleClearLogsSearch = useCallback(() => {
+    setLogsSearch('');
+    setLogsDateFrom('');
+    setLogsDateTo('');
+    setLogsDisplayCount(PAGE_SIZE);
+  }, []);
 
   const patient = patientQuery.data;
   const isLoading = patientQuery.isLoading || exerciseLogsQuery.isLoading || appSessionsQuery.isLoading;
@@ -640,7 +707,7 @@ export default function ClinicalDashboardScreen() {
           </>
         )}
 
-        {recentLogs.length > 0 && (
+        {recentLogs.length > 0 && !logsExpanded && (
           <>
             <SectionHeader icon={<Zap size={16} color="#DC2626" />} title="Recent Exercise Logs 最近訓練紀錄" />
             <View style={styles.card}>
@@ -670,6 +737,115 @@ export default function ClinicalDashboardScreen() {
               ))}
             </View>
           </>
+        )}
+
+        <TouchableOpacity
+          style={styles.logsExpandToggle}
+          onPress={() => {
+            setLogsExpanded(!logsExpanded);
+            if (!logsExpanded) setLogsDisplayCount(PAGE_SIZE);
+          }}
+          activeOpacity={0.7}
+        >
+          <FileText size={16} color={ACCENT} />
+          <Text style={styles.logsExpandToggleText}>
+            {logsExpanded ? 'Hide Full Exercise Logs 收起完整紀錄' : `View All Exercise Logs 查看全部紀錄 (${allLogs.length})`}
+          </Text>
+          {logsExpanded ? <ChevronUp size={16} color={ACCENT} /> : <ChevronDown size={16} color={ACCENT} />}
+        </TouchableOpacity>
+
+        {logsExpanded && (
+          <View style={styles.logsSection}>
+            <View style={styles.logsSearchRow}>
+              <View style={styles.logsSearchInputWrap}>
+                <Search size={14} color={Colors.textTertiary} />
+                <TextInput
+                  style={styles.logsSearchInput}
+                  placeholder="Search exercise... 搜尋運動..."
+                  placeholderTextColor={Colors.textTertiary}
+                  value={logsSearch}
+                  onChangeText={(t) => { setLogsSearch(t); setLogsDisplayCount(PAGE_SIZE); }}
+                />
+                {(logsSearch || logsDateFrom || logsDateTo) ? (
+                  <TouchableOpacity onPress={handleClearLogsSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <X size={14} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.logsDateRow}>
+              <View style={styles.logsDateField}>
+                <Text style={styles.logsDateLabel}>From 從</Text>
+                <TextInput
+                  style={styles.logsDateInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={logsDateFrom}
+                  onChangeText={(t) => { setLogsDateFrom(t); setLogsDisplayCount(PAGE_SIZE); }}
+                  maxLength={10}
+                />
+              </View>
+              <View style={styles.logsDateField}>
+                <Text style={styles.logsDateLabel}>To 至</Text>
+                <TextInput
+                  style={styles.logsDateInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={logsDateTo}
+                  onChangeText={(t) => { setLogsDateTo(t); setLogsDisplayCount(PAGE_SIZE); }}
+                  maxLength={10}
+                />
+              </View>
+            </View>
+
+            <View style={styles.logsCountBar}>
+              <Text style={styles.logsCountText}>
+                Showing {logsToShow.length} of {fullLogsFiltered.length} logs
+                {fullLogsFiltered.length !== allLogs.length ? ` (filtered from ${allLogs.length})` : ''}
+              </Text>
+            </View>
+
+            <View style={styles.card}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>Date/Time 日期時間</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Exercise 運動</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.6, textAlign: 'center' as const }]}>Rating</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.5, textAlign: 'center' as const }]}>⭐</Text>
+              </View>
+              {logsToShow.length === 0 ? (
+                <View style={styles.logsEmpty}>
+                  <Search size={20} color={Colors.textTertiary} />
+                  <Text style={styles.logsEmptyText}>No logs match your filters 沒有符合篩選的紀錄</Text>
+                </View>
+              ) : (
+                logsToShow.map((log, idx) => (
+                  <View key={log.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                    <Text style={[styles.tableCell, { flex: 1.4, fontSize: 11 }]}>{formatDateTime(log.completed_at)}</Text>
+                    <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>
+                      {log.title_en || log.exercise_title || '—'}
+                    </Text>
+                    <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'center' as const }]}>
+                      {log.self_rating != null ? (
+                        <Text style={{ color: log.self_rating >= 7 ? '#10B981' : log.self_rating >= 5 ? '#F59E0B' : '#EF4444', fontWeight: '600' as const }}>
+                          {log.self_rating}
+                        </Text>
+                      ) : '—'}
+                    </Text>
+                    <Text style={[styles.tableCell, { flex: 0.5, textAlign: 'center' as const }]}>
+                      {log.stars_earned ?? 0}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {hasMoreLogs && (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadMoreLogs} activeOpacity={0.7}>
+                <Text style={styles.loadMoreText}>Load More 載入更多 ({fullLogsFiltered.length - logsDisplayCount} remaining)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {filteredLogs.length === 0 && filteredSessions.length === 0 && (
@@ -1043,6 +1219,107 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 30,
+  },
+
+  logsExpandToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: ACCENT_LIGHT,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: ACCENT,
+  },
+  logsExpandToggleText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: ACCENT,
+  },
+  logsSection: {
+    marginTop: 10,
+    gap: 10,
+  },
+  logsSearchRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  logsSearchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    height: 40,
+  },
+  logsSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
+  logsDateRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  logsDateField: {
+    flex: 1,
+    gap: 3,
+  },
+  logsDateLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+    marginLeft: 2,
+  },
+  logsDateInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  logsCountBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  logsCountText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '500' as const,
+  },
+  logsEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    gap: 8,
+  },
+  logsEmptyText: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+  },
+  loadMoreBtn: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: ACCENT,
   },
 });
 
