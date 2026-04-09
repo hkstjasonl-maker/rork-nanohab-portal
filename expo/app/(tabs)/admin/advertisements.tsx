@@ -18,6 +18,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import {
   Search,
   X,
@@ -44,12 +46,16 @@ import {
   ToggleRight,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Copy,
+  Mail,
+  Gift,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-type TabKey = 'library' | 'analytics' | 'adfree';
+type TabKey = 'library' | 'analytics' | 'adfree' | 'report';
 
 interface AppAd {
   id: string;
@@ -205,6 +211,24 @@ export default function AdvertisementsScreen() {
   const [showClinicians, setShowClinicians] = useState(false);
   const [showTiers, setShowTiers] = useState(false);
 
+  const now = new Date();
+  const defaultStartDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const defaultEndDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  const [reportAdvertiser, setReportAdvertiser] = useState<string>('');
+  const [reportStartDate, setReportStartDate] = useState(defaultStartDate);
+  const [reportEndDate, setReportEndDate] = useState(defaultEndDate);
+  const [reportData, setReportData] = useState<{
+    rows: { title: string; placement: string; impressions: number; clicks: number; ctr: number; startDate: string; endDate: string }[];
+    totalImpressions: number;
+    totalClicks: number;
+    totalCtr: number;
+    bonusDrawCount: number;
+  } | null>(null);
+  const [showAdvertiserPicker, setShowAdvertiserPicker] = useState(false);
+  const [copiedToast, setCopiedToast] = useState(false);
+
   const adsQuery = useQuery({
     queryKey: ['admin-app-ads'],
     queryFn: async () => {
@@ -293,6 +317,99 @@ export default function AdvertisementsScreen() {
       }
     },
     enabled: isAdmin && activeTab === 'adfree',
+  });
+
+  const advertiserNamesQuery = useQuery({
+    queryKey: ['admin-advertiser-names'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_ads')
+          .select('advertiser_name')
+          .not('advertiser_name', 'is', null);
+        if (error) throw error;
+        const names = [...new Set((data || []).map((d: { advertiser_name: string }) => d.advertiser_name).filter(Boolean))] as string[];
+        return names.sort();
+      } catch (e) {
+        console.log('Error fetching advertiser names:', e);
+        return [];
+      }
+    },
+    enabled: isAdmin && activeTab === 'report',
+  });
+
+  const generateReportMutation = useMutation({
+    mutationFn: async () => {
+      if (!reportAdvertiser) throw new Error('Please select an advertiser');
+      if (!reportStartDate || !reportEndDate) throw new Error('Please set date range');
+
+      const { data: ads, error: adsErr } = await supabase
+        .from('app_ads')
+        .select('*')
+        .eq('advertiser_name', reportAdvertiser);
+      if (adsErr) throw adsErr;
+      if (!ads || ads.length === 0) throw new Error('No ads found for this advertiser');
+
+      const adIds = ads.map((a: AppAd) => a.id);
+
+      const { data: impressions } = await supabase
+        .from('app_ad_impressions')
+        .select('ad_id')
+        .in('ad_id', adIds)
+        .gte('viewed_at', reportStartDate + 'T00:00:00')
+        .lte('viewed_at', reportEndDate + 'T23:59:59');
+
+      const { data: clicks } = await supabase
+        .from('app_ad_clicks')
+        .select('ad_id')
+        .in('ad_id', adIds)
+        .gte('clicked_at', reportStartDate + 'T00:00:00')
+        .lte('clicked_at', reportEndDate + 'T23:59:59');
+
+      let bonusDrawCount = 0;
+      try {
+        const { data: bonusDraws } = await supabase
+          .from('sponsored_bonus_draws')
+          .select('ad_id')
+          .in('ad_id', adIds)
+          .gte('created_at', reportStartDate + 'T00:00:00')
+          .lte('created_at', reportEndDate + 'T23:59:59');
+        bonusDrawCount = bonusDraws?.length ?? 0;
+      } catch (e) {
+        console.log('sponsored_bonus_draws query failed (table may not exist):', e);
+      }
+
+      const impByAd: Record<string, number> = {};
+      const clickByAd: Record<string, number> = {};
+      (impressions || []).forEach((r: { ad_id: string }) => { impByAd[r.ad_id] = (impByAd[r.ad_id] || 0) + 1; });
+      (clicks || []).forEach((r: { ad_id: string }) => { clickByAd[r.ad_id] = (clickByAd[r.ad_id] || 0) + 1; });
+
+      const rows = ads.map((ad: AppAd) => {
+        const imp = impByAd[ad.id] || 0;
+        const clk = clickByAd[ad.id] || 0;
+        return {
+          title: ad.title,
+          placement: PLACEMENT_LABELS[ad.placement] || ad.placement,
+          impressions: imp,
+          clicks: clk,
+          ctr: imp > 0 ? (clk / imp) * 100 : 0,
+          startDate: ad.start_date || '—',
+          endDate: ad.end_date || '—',
+        };
+      });
+
+      const totalImpressions = rows.reduce((s, r) => s + r.impressions, 0);
+      const totalClicks = rows.reduce((s, r) => s + r.clicks, 0);
+      const totalCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+
+      return { rows, totalImpressions, totalClicks, totalCtr, bonusDrawCount };
+    },
+    onSuccess: (data) => {
+      setReportData(data);
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
   });
 
   const targetCountsQuery = useQuery({
@@ -690,6 +807,40 @@ export default function AdvertisementsScreen() {
     );
   }, [selectedBatchIds, updatePatientAdFreeMutation]);
 
+  const buildReportText = useCallback(() => {
+    if (!reportData) return '';
+    const lines: string[] = [
+      'NanoHab 醫家動 — Advertiser Performance Report',
+      `Advertiser: ${reportAdvertiser}`,
+      `Period: ${reportStartDate} — ${reportEndDate}`,
+      '',
+    ];
+    reportData.rows.forEach(r => {
+      lines.push(`${r.title} | ${r.placement} | ${r.impressions} imp | ${r.clicks} clicks | ${r.ctr.toFixed(1)}%`);
+    });
+    lines.push('');
+    lines.push(`TOTAL: ${reportData.totalImpressions} impressions | ${reportData.totalClicks} clicks | ${reportData.totalCtr.toFixed(1)}% CTR`);
+    lines.push(`Sponsored Bonus Draws: ${reportData.bonusDrawCount}`);
+    lines.push(`Generated by NanoHab Portal on ${new Date().toISOString().split('T')[0]}`);
+    return lines.join('\n');
+  }, [reportData, reportAdvertiser, reportStartDate, reportEndDate]);
+
+  const handleCopyReport = useCallback(async () => {
+    const text = buildReportText();
+    if (!text) return;
+    await Clipboard.setStringAsync(text);
+    setCopiedToast(true);
+    setTimeout(() => setCopiedToast(false), 2000);
+  }, [buildReportText]);
+
+  const handleEmailReport = useCallback(() => {
+    const text = buildReportText();
+    if (!text) return;
+    const subject = encodeURIComponent(`NanoHab Ad Report — ${reportAdvertiser} — ${reportStartDate} to ${reportEndDate}`);
+    const body = encodeURIComponent(text);
+    Linking.openURL(`mailto:?subject=${subject}&body=${body}`);
+  }, [buildReportText, reportAdvertiser, reportStartDate, reportEndDate]);
+
   const onRefresh = useCallback(() => {
     if (activeTab === 'library') {
       void adsQuery.refetch();
@@ -698,12 +849,14 @@ export default function AdvertisementsScreen() {
       void impressionsQuery.refetch();
       void clicksQuery.refetch();
       void adsQuery.refetch();
+    } else if (activeTab === 'report') {
+      void advertiserNamesQuery.refetch();
     } else {
       void patientsAdFreeQuery.refetch();
       void cliniciansQuery.refetch();
       void tiersQuery.refetch();
     }
-  }, [activeTab, adsQuery, targetCountsQuery, impressionsQuery, clicksQuery, patientsAdFreeQuery, cliniciansQuery, tiersQuery]);
+  }, [activeTab, adsQuery, targetCountsQuery, impressionsQuery, clicksQuery, patientsAdFreeQuery, cliniciansQuery, tiersQuery, advertiserNamesQuery]);
 
   if (!isAdmin) {
     return (
@@ -715,7 +868,7 @@ export default function AdvertisementsScreen() {
   }
 
   const targetCounts = targetCountsQuery.data || {};
-  const isRefreshing = activeTab === 'library' ? adsQuery.isFetching : activeTab === 'analytics' ? (impressionsQuery.isFetching || clicksQuery.isFetching) : patientsAdFreeQuery.isFetching;
+  const isRefreshing = activeTab === 'library' ? adsQuery.isFetching : activeTab === 'analytics' ? (impressionsQuery.isFetching || clicksQuery.isFetching) : activeTab === 'report' ? advertiserNamesQuery.isFetching : patientsAdFreeQuery.isFetching;
 
   const renderLibraryTab = () => (
     <>
@@ -922,6 +1075,135 @@ export default function AdvertisementsScreen() {
     </>
   );
 
+  const renderReportTab = () => (
+    <>
+      <Text style={styles.fieldLabel}>Advertiser 廣告商</Text>
+      <TouchableOpacity
+        style={styles.dropdownTrigger}
+        onPress={() => setShowAdvertiserPicker(!showAdvertiserPicker)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.dropdownTriggerText, !reportAdvertiser && { color: Colors.textTertiary }]}>
+          {reportAdvertiser || 'Select advertiser...'}
+        </Text>
+        <ChevronDown size={18} color={Colors.textSecondary} />
+      </TouchableOpacity>
+      {showAdvertiserPicker && (
+        <View style={styles.dropdownList}>
+          {advertiserNamesQuery.isLoading ? (
+            <ActivityIndicator size="small" color={Colors.accent} style={{ padding: 12 }} />
+          ) : (advertiserNamesQuery.data || []).length === 0 ? (
+            <Text style={styles.dropdownEmpty}>No advertisers found</Text>
+          ) : (
+            (advertiserNamesQuery.data || []).map(name => (
+              <TouchableOpacity
+                key={name}
+                style={[styles.dropdownItem, reportAdvertiser === name && styles.dropdownItemActive]}
+                onPress={() => { setReportAdvertiser(name); setShowAdvertiserPicker(false); setReportData(null); }}
+              >
+                <Text style={[styles.dropdownItemText, reportAdvertiser === name && { color: Colors.accent, fontWeight: '600' as const }]}>{name}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      )}
+
+      <View style={styles.rowFields}>
+        <View style={styles.halfField}>
+          <Text style={styles.fieldLabel}>Start Date 開始</Text>
+          <TextInput
+            style={styles.input}
+            value={reportStartDate}
+            onChangeText={(v) => { setReportStartDate(v); setReportData(null); }}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.textTertiary}
+          />
+        </View>
+        <View style={styles.halfField}>
+          <Text style={styles.fieldLabel}>End Date 結束</Text>
+          <TextInput
+            style={styles.input}
+            value={reportEndDate}
+            onChangeText={(v) => { setReportEndDate(v); setReportData(null); }}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.textTertiary}
+          />
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.generateBtn, generateReportMutation.isPending && { opacity: 0.6 }]}
+        onPress={() => generateReportMutation.mutate()}
+        disabled={generateReportMutation.isPending}
+        activeOpacity={0.7}
+      >
+        {generateReportMutation.isPending ? (
+          <ActivityIndicator size="small" color={Colors.white} />
+        ) : (
+          <>
+            <FileText size={18} color={Colors.white} />
+            <Text style={styles.generateBtnText}>Generate Report 生成報告</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {reportData && (
+        <>
+          <View style={styles.reportTable}>
+            <View style={styles.reportTableHeader}>
+              <Text style={[styles.reportTh, { flex: 2 }]}>Ad Title</Text>
+              <Text style={[styles.reportTh, { flex: 1.2 }]}>Placement</Text>
+              <Text style={[styles.reportTh, { flex: 0.8, textAlign: 'right' as const }]}>Imp</Text>
+              <Text style={[styles.reportTh, { flex: 0.8, textAlign: 'right' as const }]}>Clicks</Text>
+              <Text style={[styles.reportTh, { flex: 0.8, textAlign: 'right' as const }]}>CTR%</Text>
+            </View>
+            {reportData.rows.map((row, idx) => (
+              <View key={idx} style={[styles.reportTableRow, idx % 2 === 1 && { backgroundColor: Colors.surfaceSecondary }]}>
+                <Text style={[styles.reportTd, { flex: 2 }]} numberOfLines={1}>{row.title}</Text>
+                <Text style={[styles.reportTd, { flex: 1.2 }]}>{row.placement}</Text>
+                <Text style={[styles.reportTd, { flex: 0.8, textAlign: 'right' as const }]}>{row.impressions}</Text>
+                <Text style={[styles.reportTd, { flex: 0.8, textAlign: 'right' as const }]}>{row.clicks}</Text>
+                <Text style={[styles.reportTd, { flex: 0.8, textAlign: 'right' as const }]}>{row.ctr.toFixed(1)}</Text>
+              </View>
+            ))}
+            <View style={styles.reportTableTotal}>
+              <Text style={[styles.reportTotalTd, { flex: 2 }]}>TOTAL</Text>
+              <Text style={[styles.reportTotalTd, { flex: 1.2 }]}></Text>
+              <Text style={[styles.reportTotalTd, { flex: 0.8, textAlign: 'right' as const }]}>{reportData.totalImpressions}</Text>
+              <Text style={[styles.reportTotalTd, { flex: 0.8, textAlign: 'right' as const }]}>{reportData.totalClicks}</Text>
+              <Text style={[styles.reportTotalTd, { flex: 0.8, textAlign: 'right' as const }]}>{reportData.totalCtr.toFixed(1)}</Text>
+            </View>
+          </View>
+
+          {reportData.bonusDrawCount > 0 && (
+            <View style={styles.bonusDrawRow}>
+              <Gift size={16} color="#FF9500" />
+              <Text style={styles.bonusDrawText}>Sponsored Bonus Draws: {reportData.bonusDrawCount}</Text>
+            </View>
+          )}
+
+          <View style={styles.reportActions}>
+            <TouchableOpacity style={styles.reportActionBtn} onPress={handleCopyReport} activeOpacity={0.7}>
+              <Copy size={16} color={Colors.white} />
+              <Text style={styles.reportActionBtnText}>Copy Report 複製報告</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.reportActionBtn, { backgroundColor: '#3478F6' }]} onPress={handleEmailReport} activeOpacity={0.7}>
+              <Mail size={16} color={Colors.white} />
+              <Text style={styles.reportActionBtnText}>Email Report 電郵報告</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
+      {copiedToast && (
+        <View style={styles.toast}>
+          <Check size={16} color={Colors.white} />
+          <Text style={styles.toastText}>Copied! 已複製</Text>
+        </View>
+      )}
+    </>
+  );
+
   const renderAdFreeTab = () => (
     <>
       {selectedBatchIds.length > 0 && (
@@ -1063,6 +1345,10 @@ export default function AdvertisementsScreen() {
           <UserX size={16} color={activeTab === 'adfree' ? Colors.accent : Colors.textTertiary} />
           <Text style={[styles.tabText, activeTab === 'adfree' && styles.tabTextActive]}>Ad-Free</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, activeTab === 'report' && styles.tabActive]} onPress={() => setActiveTab('report')}>
+          <FileText size={16} color={activeTab === 'report' ? Colors.accent : Colors.textTertiary} />
+          <Text style={[styles.tabText, activeTab === 'report' && styles.tabTextActive]}>Report</Text>
+        </TouchableOpacity>
       </View>
 
       {(activeTab === 'library' || activeTab === 'adfree') && (
@@ -1094,6 +1380,7 @@ export default function AdvertisementsScreen() {
         {activeTab === 'library' && renderLibraryTab()}
         {activeTab === 'analytics' && renderAnalyticsTab()}
         {activeTab === 'adfree' && renderAdFreeTab()}
+        {activeTab === 'report' && renderReportTab()}
       </ScrollView>
 
       {activeTab === 'library' && (
@@ -1684,4 +1971,116 @@ const styles = StyleSheet.create({
   adFreeRight: { alignItems: 'flex-end', gap: 4 },
   adFreeBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   adFreeBadgeText: { fontSize: 10, fontWeight: '600' as const },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dropdownTriggerText: { fontSize: 15, color: Colors.text, flex: 1 },
+  dropdownList: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 4,
+    maxHeight: 220,
+    overflow: 'hidden',
+  },
+  dropdownEmpty: { padding: 14, fontSize: 13, color: Colors.textTertiary, textAlign: 'center' },
+  dropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  dropdownItemActive: { backgroundColor: Colors.accent + '0A' },
+  dropdownItemText: { fontSize: 14, color: Colors.text },
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 20,
+  },
+  generateBtnText: { fontSize: 15, fontWeight: '600' as const, color: Colors.white },
+  reportTable: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  reportTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: Colors.text,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  reportTh: { fontSize: 11, fontWeight: '600' as const, color: Colors.white },
+  reportTableRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  reportTd: { fontSize: 12, color: Colors.text },
+  reportTableTotal: {
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    backgroundColor: Colors.accent + '10',
+    borderTopWidth: 1,
+    borderTopColor: Colors.accent + '30',
+  },
+  reportTotalTd: { fontSize: 12, fontWeight: '700' as const, color: Colors.accent },
+  bonusDrawRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    backgroundColor: '#FF950012',
+    borderRadius: 10,
+    padding: 12,
+  },
+  bonusDrawText: { fontSize: 13, fontWeight: '600' as const, color: '#FF9500' },
+  reportActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  reportActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.accent,
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  reportActionBtnText: { fontSize: 13, fontWeight: '600' as const, color: Colors.white },
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.success,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignSelf: 'center' as const,
+  },
+  toastText: { fontSize: 13, fontWeight: '600' as const, color: Colors.white },
 });
