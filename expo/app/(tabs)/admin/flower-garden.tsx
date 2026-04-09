@@ -27,12 +27,16 @@ import {
   Shield,
   Flower2,
   User,
+  Dices,
+  Trophy,
+  Star,
+  Edit3,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-type TabKey = 'types' | 'patient_flowers';
+type TabKey = 'types' | 'patient_flowers' | 'gacha_draws' | 'patient_prizes';
 
 interface FlowerType {
   id: string;
@@ -60,6 +64,29 @@ interface PatientFlower {
   flower_types?: { name_en: string; name_zh: string; rarity: string; image_url?: string };
 }
 
+interface GachaDraw {
+  id: string;
+  patient_id: string;
+  draw_type: string;
+  prize_type: string;
+  prize_name: string;
+  prize_name_zh?: string;
+  stars_spent: number;
+  created_at: string;
+  patients?: { patient_name: string };
+}
+
+interface PatientPrize {
+  id: string;
+  patient_id: string;
+  prize_type: string;
+  prize_id: string;
+  prize_name: string;
+  obtained_at: string;
+  is_active: boolean;
+  patients?: { patient_name: string };
+}
+
 const RARITIES = ['common', 'rare', 'epic', 'legendary'] as const;
 
 function getRarityColor(r: string) {
@@ -81,6 +108,26 @@ function getMethodColor(m: string) {
   }
 }
 
+function getDrawTypeColor(t: string) {
+  switch (t) {
+    case 'single': return Colors.info;
+    case 'multi': return '#7C5CFC';
+    case 'guaranteed': return Colors.accent;
+    default: return Colors.textTertiary;
+  }
+}
+
+function getPrizeTypeColor(t: string) {
+  switch (t) {
+    case 'flower': return Colors.success;
+    case 'avatar': return Colors.info;
+    case 'theme': return '#7C5CFC';
+    case 'badge': return Colors.accent;
+    case 'sticker': return '#D4A030';
+    default: return Colors.textTertiary;
+  }
+}
+
 export default function FlowerGardenScreen() {
   const { isAdmin } = useAuth();
   const router = useRouter();
@@ -98,6 +145,14 @@ export default function FlowerGardenScreen() {
   const [descEn, setDescEn] = useState('');
   const [descZh, setDescZh] = useState('');
   const [isActive, setIsActive] = useState(true);
+
+  const [prizeModalVisible, setPrizeModalVisible] = useState(false);
+  const [editingPrizeId, setEditingPrizeId] = useState<string | null>(null);
+  const [prizePatientId, setPrizePatientId] = useState('');
+  const [prizeType, setPrizeType] = useState('');
+  const [prizeIdField, setPrizeIdField] = useState('');
+  const [prizeName, setPrizeName] = useState('');
+  const [prizeIsActive, setPrizeIsActive] = useState(true);
 
   const typesQuery = useQuery({
     queryKey: ['admin-flower-types'],
@@ -135,6 +190,43 @@ export default function FlowerGardenScreen() {
     enabled: isAdmin && activeTab === 'patient_flowers',
   });
 
+  const gachaDrawsQuery = useQuery({
+    queryKey: ['admin-gacha-draws'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('gacha_draws')
+          .select('*, patients(patient_name)')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        return (data || []) as GachaDraw[];
+      } catch (e) {
+        console.log('Error fetching gacha draws:', e);
+        return [];
+      }
+    },
+    enabled: isAdmin && activeTab === 'gacha_draws',
+  });
+
+  const patientPrizesQuery = useQuery({
+    queryKey: ['admin-patient-prizes'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('patient_prizes')
+          .select('*, patients(patient_name)')
+          .order('obtained_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as PatientPrize[];
+      } catch (e) {
+        console.log('Error fetching patient prizes:', e);
+        return [];
+      }
+    },
+    enabled: isAdmin && activeTab === 'patient_prizes',
+  });
+
   const filteredTypes = useMemo(() => {
     if (!typesQuery.data) return [];
     if (!search.trim()) return typesQuery.data;
@@ -154,6 +246,28 @@ export default function FlowerGardenScreen() {
       pf.flower_types?.name_zh?.includes(s)
     );
   }, [patientFlowersQuery.data, search]);
+
+  const filteredGachaDraws = useMemo(() => {
+    if (!gachaDrawsQuery.data) return [];
+    if (!search.trim()) return gachaDrawsQuery.data;
+    const s = search.toLowerCase();
+    return gachaDrawsQuery.data.filter(d =>
+      d.patients?.patient_name?.toLowerCase().includes(s) ||
+      d.prize_name?.toLowerCase().includes(s) ||
+      d.draw_type?.toLowerCase().includes(s)
+    );
+  }, [gachaDrawsQuery.data, search]);
+
+  const filteredPatientPrizes = useMemo(() => {
+    if (!patientPrizesQuery.data) return [];
+    if (!search.trim()) return patientPrizesQuery.data;
+    const s = search.toLowerCase();
+    return patientPrizesQuery.data.filter(p =>
+      p.patients?.patient_name?.toLowerCase().includes(s) ||
+      p.prize_name?.toLowerCase().includes(s) ||
+      p.prize_type?.toLowerCase().includes(s)
+    );
+  }, [patientPrizesQuery.data, search]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -235,6 +349,79 @@ export default function FlowerGardenScreen() {
     ]);
   }, [deleteMutation]);
 
+  const resetPrizeForm = useCallback(() => {
+    setEditingPrizeId(null);
+    setPrizePatientId('');
+    setPrizeType('');
+    setPrizeIdField('');
+    setPrizeName('');
+    setPrizeIsActive(true);
+  }, []);
+
+  const openNewPrize = useCallback(() => {
+    resetPrizeForm();
+    setPrizeModalVisible(true);
+  }, [resetPrizeForm]);
+
+  const openEditPrize = useCallback((p: PatientPrize) => {
+    setEditingPrizeId(p.id);
+    setPrizePatientId(p.patient_id || '');
+    setPrizeType(p.prize_type || '');
+    setPrizeIdField(p.prize_id || '');
+    setPrizeName(p.prize_name || '');
+    setPrizeIsActive(p.is_active ?? true);
+    setPrizeModalVisible(true);
+  }, []);
+
+  const savePrizeMutation = useMutation({
+    mutationFn: async () => {
+      if (!prizePatientId.trim()) throw new Error('Patient ID is required');
+      if (!prizeName.trim()) throw new Error('Prize name is required');
+      const payload: Record<string, unknown> = {
+        patient_id: prizePatientId.trim(),
+        prize_type: prizeType.trim() || null,
+        prize_id: prizeIdField.trim() || null,
+        prize_name: prizeName.trim(),
+        is_active: prizeIsActive,
+      };
+      if (editingPrizeId) {
+        const { error } = await supabase.from('patient_prizes').update(payload).eq('id', editingPrizeId);
+        if (error) throw error;
+      } else {
+        (payload as Record<string, unknown>).obtained_at = new Date().toISOString();
+        const { error } = await supabase.from('patient_prizes').insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-patient-prizes'] });
+      setPrizeModalVisible(false);
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const deletePrizeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('patient_prizes').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-patient-prizes'] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const confirmDeletePrize = useCallback((id: string) => {
+    Alert.alert('Delete Prize 刪除獎品', 'Are you sure? 確定刪除？', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deletePrizeMutation.mutate(id) },
+    ]);
+  }, [deletePrizeMutation]);
+
   if (!isAdmin) {
     return (
       <View style={styles.centered}>
@@ -244,8 +431,15 @@ export default function FlowerGardenScreen() {
     );
   }
 
-  const isTypesTab = activeTab === 'types';
-  const currentQuery = isTypesTab ? typesQuery : patientFlowersQuery;
+  const currentQuery = activeTab === 'types' ? typesQuery
+    : activeTab === 'patient_flowers' ? patientFlowersQuery
+    : activeTab === 'gacha_draws' ? gachaDrawsQuery
+    : patientPrizesQuery;
+
+  const searchPlaceholder = activeTab === 'types' ? 'Search flower types...'
+    : activeTab === 'patient_flowers' ? 'Search by patient or flower...'
+    : activeTab === 'gacha_draws' ? 'Search draws by patient or prize...'
+    : 'Search prizes by patient or name...';
 
   return (
     <View style={styles.container}>
@@ -261,26 +455,30 @@ export default function FlowerGardenScreen() {
         </View>
       </SafeAreaView>
 
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, isTypesTab && styles.tabItemActive]}
-          onPress={() => { setActiveTab('types'); setSearch(''); }}
-        >
-          <Text style={[styles.tabText, isTypesTab && styles.tabTextActive]}>Flower Types 花朵類型</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabItem, !isTypesTab && styles.tabItemActive]}
-          onPress={() => { setActiveTab('patient_flowers'); setSearch(''); }}
-        >
-          <Text style={[styles.tabText, !isTypesTab && styles.tabTextActive]}>Patient Flowers 患者花朵</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBarScroll} contentContainerStyle={styles.tabBarScrollContent}>
+        <View style={styles.tabBar}>
+          {(['types', 'patient_flowers', 'gacha_draws', 'patient_prizes'] as const).map(tab => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
+              onPress={() => { setActiveTab(tab); setSearch(''); }}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]} numberOfLines={1}>
+                {tab === 'types' ? 'Flowers 花朵'
+                  : tab === 'patient_flowers' ? 'Owned 擁有'
+                  : tab === 'gacha_draws' ? 'Draws 抽獎'
+                  : 'Prizes 獎品'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
 
       <View style={styles.searchContainer}>
         <Search size={18} color={Colors.textTertiary} />
         <TextInput
           style={styles.searchInput}
-          placeholder={isTypesTab ? 'Search flower types...' : 'Search by patient or flower...'}
+          placeholder={searchPlaceholder}
           placeholderTextColor={Colors.textTertiary}
           value={search}
           onChangeText={setSearch}
@@ -302,7 +500,7 @@ export default function FlowerGardenScreen() {
       >
         {currentQuery.isLoading ? (
           <ActivityIndicator size="large" color={Colors.accent} style={{ marginTop: 40 }} />
-        ) : isTypesTab ? (
+        ) : activeTab === 'types' ? (
           filteredTypes.length === 0 ? (
             <View style={styles.emptyWrap}>
               <Flower2 size={40} color={Colors.textTertiary} />
@@ -341,7 +539,7 @@ export default function FlowerGardenScreen() {
               </TouchableOpacity>
             ))
           )
-        ) : (
+        ) : activeTab === 'patient_flowers' ? (
           filteredPatientFlowers.length === 0 ? (
             <View style={styles.emptyWrap}>
               <User size={40} color={Colors.textTertiary} />
@@ -393,11 +591,93 @@ export default function FlowerGardenScreen() {
               </View>
             ))
           )
+        ) : activeTab === 'gacha_draws' ? (
+          filteredGachaDraws.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Dices size={40} color={Colors.textTertiary} />
+              <Text style={styles.emptyText}>No gacha draws found</Text>
+              <Text style={styles.emptySubtext}>找不到抽獎記錄</Text>
+            </View>
+          ) : (
+            filteredGachaDraws.map(d => (
+              <View key={d.id} style={styles.card}>
+                <View style={styles.cardRow}>
+                  <View style={[styles.gachaIcon, { backgroundColor: getDrawTypeColor(d.draw_type) + '18' }]}>
+                    <Dices size={24} color={getDrawTypeColor(d.draw_type)} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{d.patients?.patient_name || 'Unknown'}</Text>
+                    <Text style={styles.cardSubtitle} numberOfLines={1}>
+                      {d.prize_name || '—'}{d.prize_name_zh ? ` ${d.prize_name_zh}` : ''}
+                    </Text>
+                    <View style={styles.cardMeta}>
+                      <View style={[styles.rarityBadge, { backgroundColor: getDrawTypeColor(d.draw_type) + '18' }]}>
+                        <Text style={[styles.rarityBadgeText, { color: getDrawTypeColor(d.draw_type) }]}>{d.draw_type || '—'}</Text>
+                      </View>
+                      {d.prize_type ? (
+                        <View style={[styles.methodBadge, { backgroundColor: getPrizeTypeColor(d.prize_type) + '18' }]}>
+                          <Text style={[styles.methodBadgeText, { color: getPrizeTypeColor(d.prize_type) }]}>{d.prize_type}</Text>
+                        </View>
+                      ) : null}
+                      {d.stars_spent > 0 && (
+                        <View style={styles.starsRow}>
+                          <Star size={12} color={Colors.accent} />
+                          <Text style={styles.starsText}>{d.stars_spent}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.dateText}>
+                      {d.created_at ? new Date(d.created_at).toLocaleDateString() + ' ' + new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )
+        ) : (
+          filteredPatientPrizes.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Trophy size={40} color={Colors.textTertiary} />
+              <Text style={styles.emptyText}>No patient prizes found</Text>
+              <Text style={styles.emptySubtext}>找不到患者獎品</Text>
+            </View>
+          ) : (
+            filteredPatientPrizes.map(p => (
+              <TouchableOpacity key={p.id} style={styles.card} onPress={() => openEditPrize(p)} activeOpacity={0.7}>
+                <View style={styles.cardRow}>
+                  <View style={[styles.gachaIcon, { backgroundColor: getPrizeTypeColor(p.prize_type) + '18' }]}>
+                    <Trophy size={24} color={getPrizeTypeColor(p.prize_type)} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <View style={styles.cardTopRow}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>{p.patients?.patient_name || 'Unknown'}</Text>
+                      <TouchableOpacity onPress={() => confirmDeletePrize(p.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Trash2 size={16} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.cardSubtitle} numberOfLines={1}>{p.prize_name || '—'}</Text>
+                    <View style={styles.cardMeta}>
+                      {p.prize_type ? (
+                        <View style={[styles.rarityBadge, { backgroundColor: getPrizeTypeColor(p.prize_type) + '18' }]}>
+                          <Text style={[styles.rarityBadgeText, { color: getPrizeTypeColor(p.prize_type) }]}>{p.prize_type}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.statusDot, { backgroundColor: p.is_active ? Colors.success : Colors.frozen }]} />
+                      <Text style={styles.statusLabel}>{p.is_active ? 'Active' : 'Inactive'}</Text>
+                    </View>
+                    <Text style={styles.dateText}>
+                      {p.obtained_at ? new Date(p.obtained_at).toLocaleDateString() : '—'}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )
         )}
       </ScrollView>
 
-      {isTypesTab && (
-        <TouchableOpacity style={styles.fab} onPress={openNew} activeOpacity={0.8}>
+      {(activeTab === 'types' || activeTab === 'patient_prizes') && (
+        <TouchableOpacity style={styles.fab} onPress={activeTab === 'types' ? openNew : openNewPrize} activeOpacity={0.8}>
           <Plus size={24} color={Colors.white} />
         </TouchableOpacity>
       )}
@@ -462,6 +742,44 @@ export default function FlowerGardenScreen() {
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+      <Modal visible={prizeModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setPrizeModalVisible(false)}>
+                <X size={24} color={Colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingPrizeId ? 'Edit' : 'Add'} Prize 獎品</Text>
+              <TouchableOpacity onPress={() => savePrizeMutation.mutate()} disabled={savePrizeMutation.isPending}>
+                {savePrizeMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : (
+                  <Text style={styles.saveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>Patient ID 患者ID *</Text>
+              <TextInput style={styles.input} value={prizePatientId} onChangeText={setPrizePatientId} placeholder="UUID" placeholderTextColor={Colors.textTertiary} autoCapitalize="none" />
+
+              <Text style={styles.fieldLabel}>Prize Name 獎品名稱 *</Text>
+              <TextInput style={styles.input} value={prizeName} onChangeText={setPrizeName} placeholder="Golden Flower" placeholderTextColor={Colors.textTertiary} />
+
+              <Text style={styles.fieldLabel}>Prize Type 獎品類型</Text>
+              <TextInput style={styles.input} value={prizeType} onChangeText={setPrizeType} placeholder="flower, avatar, theme, badge..." placeholderTextColor={Colors.textTertiary} autoCapitalize="none" />
+
+              <Text style={styles.fieldLabel}>Prize ID 獎品ID</Text>
+              <TextInput style={styles.input} value={prizeIdField} onChangeText={setPrizeIdField} placeholder="Optional identifier" placeholderTextColor={Colors.textTertiary} autoCapitalize="none" />
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Active 啟用</Text>
+                <Switch value={prizeIsActive} onValueChange={setPrizeIsActive} trackColor={{ true: Colors.accent, false: Colors.border }} thumbColor={Colors.white} />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
@@ -473,11 +791,11 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: '700' as const, color: Colors.white },
   headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  tabBarScroll: { maxHeight: 52, marginTop: 12 },
+  tabBarScrollContent: { paddingHorizontal: 16 },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
-    marginHorizontal: 16,
-    marginTop: 12,
     borderRadius: 12,
     padding: 4,
     shadowColor: Colors.black,
@@ -487,8 +805,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   tabItem: {
-    flex: 1,
     paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
     alignItems: 'center',
   },
@@ -554,6 +872,15 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusLabel: { fontSize: 12, color: Colors.textSecondary },
   dateText: { fontSize: 11, color: Colors.textTertiary },
+  gachaIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  starsText: { fontSize: 12, fontWeight: '600' as const, color: Colors.accent },
   emptyWrap: { alignItems: 'center', marginTop: 60, gap: 6 },
   emptyText: { fontSize: 15, color: Colors.textTertiary },
   emptySubtext: { fontSize: 13, color: Colors.textTertiary },
