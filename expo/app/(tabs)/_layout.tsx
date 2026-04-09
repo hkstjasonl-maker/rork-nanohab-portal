@@ -1,11 +1,11 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store, Shield, FlaskConical } from 'lucide-react-native';
+import { LayoutDashboard, Users, Settings, BookOpen, ClipboardList, Store, Shield, FlaskConical, Library } from 'lucide-react-native';
 import React from 'react';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 
 export default function TabLayout() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, clinicianCan } = useAuth();
 
   return (
     <Tabs
@@ -56,6 +56,14 @@ export default function TabLayout() {
         options={{
           title: 'Market',
           tabBarIcon: ({ color, size }) => <Store size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="library"
+        options={{
+          title: 'My Library',
+          tabBarIcon: ({ color, size }) => <Library size={size} color={color} />,
+          href: (isAdmin || clinicianCan('view_library')) ? '/library' : null,
         }}
       />
       <Tabs.Screen

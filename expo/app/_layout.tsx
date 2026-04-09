@@ -82,6 +82,14 @@ function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="pdf-viewer"
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          gestureEnabled: false,
+        }}
+      />
     </Stack>
   );
 }

@@ -31,6 +31,7 @@ export interface Clinician {
   override_can_push_feeding_skills?: boolean | null;
   override_can_manage_reinforcement?: boolean | null;
   override_can_send_notifications?: boolean | null;
+  override_can_view_library?: boolean | null;
   expires_at?: string;
 }
 
@@ -53,6 +54,7 @@ export interface ClinicianTier {
   can_push_feeding_skills?: boolean;
   can_manage_reinforcement?: boolean;
   can_send_notifications?: boolean;
+  can_view_library?: boolean;
 }
 
 export interface Patient {
