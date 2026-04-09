@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { trad2simp } from '@/lib/trad2simp';
 
 interface ObjectiveFormData {
   id?: string;
@@ -131,7 +132,16 @@ export default function ObjectiveFormModal({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Objective (简中)</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Objective (简中)</Text>
+              <TouchableOpacity
+                style={styles.convertBtn}
+                onPress={() => setObjectiveZhHans(trad2simp(objectiveZhHant))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.convertBtnText}>繁→简</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={[styles.input, styles.inputMultiline]}
               value={objectiveZhHans}
@@ -248,5 +258,21 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 14,
     color: Colors.textSecondary,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  convertBtn: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  convertBtnText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
   },
 });

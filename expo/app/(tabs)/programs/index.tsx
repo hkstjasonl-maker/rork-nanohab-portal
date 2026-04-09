@@ -38,6 +38,7 @@ import Colors from '@/constants/colors';
 import { Patient, ExerciseProgram, ProgramExercise, Exercise, ProgramObjective } from '@/types';
 import ObjectiveFormModal from '@/components/ObjectiveFormModal';
 import VideoReviewRequirements from '@/components/VideoReviewRequirements';
+import { trad2simp } from '@/lib/trad2simp';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABELS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
@@ -1002,7 +1003,15 @@ function ProgramFormModal({
         >
           <FormField label="Program Name 計劃名稱 *" value={name} onChangeText={setName} placeholder="Program name" />
           <FormField label="Chinese Name 中文名稱 (繁)" value={nameZh} onChangeText={setNameZh} placeholder="計劃名稱" />
-          <FormField label="Chinese Name 中文名称 (简)" value={nameZhCn} onChangeText={setNameZhCn} placeholder="计划名称" />
+          <View style={styles.fieldWithConvert}>
+            <View style={styles.convertLabelRow}>
+              <Text style={styles.formLabel}>Chinese Name 中文名称 (简)</Text>
+              <TouchableOpacity style={styles.convertBtn} onPress={() => setNameZhCn(trad2simp(nameZh))} activeOpacity={0.7}>
+                <Text style={styles.convertBtnText}>繁→简</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.formInput} value={nameZhCn} onChangeText={setNameZhCn} placeholder="计划名称" placeholderTextColor={Colors.textTertiary} />
+          </View>
 
           <View style={styles.dateRow}>
             <View style={styles.dateField}>
@@ -2151,6 +2160,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fieldWithConvert: {
+    gap: 6,
+  },
+  convertLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginLeft: 4,
+  },
+  convertBtn: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  convertBtnText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
   },
 });
 

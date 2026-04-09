@@ -47,6 +47,7 @@ import {
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { trad2simp } from '@/lib/trad2simp';
 
 interface Assessment {
   id: string;
@@ -2171,7 +2172,12 @@ export default function AssessmentsScreen() {
                 multiline
               />
 
-              <Text style={styles.fieldLabel}>Description (简体中文)</Text>
+              <View style={styles.convertLabelRow}>
+                <Text style={styles.fieldLabel}>Description (简体中文)</Text>
+                <TouchableOpacity style={styles.convertBtn} onPress={() => setTplDescZhHans(trad2simp(tplDescZhHant))} activeOpacity={0.7}>
+                  <Text style={styles.convertBtnText}>繁→简</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 value={tplDescZhHans}
@@ -2312,7 +2318,12 @@ export default function AssessmentsScreen() {
                       placeholderTextColor={Colors.textTertiary}
                     />
 
-                    <Text style={styles.fieldLabel}>Question (简体中文)</Text>
+                    <View style={styles.convertLabelRow}>
+                      <Text style={styles.fieldLabel}>Question (简体中文)</Text>
+                      <TouchableOpacity style={styles.convertBtn} onPress={() => setTplNewQZhHans(trad2simp(tplNewQZhHant))} activeOpacity={0.7}>
+                        <Text style={styles.convertBtnText}>繁→简</Text>
+                      </TouchableOpacity>
+                    </View>
                     <TextInput
                       style={styles.input}
                       value={tplNewQZhHans}
@@ -3148,4 +3159,21 @@ const styles = StyleSheet.create({
   },
   answerKey: { fontSize: 13, fontWeight: '500' as const, color: Colors.textSecondary, flex: 1 },
   answerValue: { fontSize: 14, fontWeight: '600' as const, color: Colors.text, textAlign: 'right' as const },
+  convertLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  convertBtn: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  convertBtnText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.accentDark,
+  },
 });
