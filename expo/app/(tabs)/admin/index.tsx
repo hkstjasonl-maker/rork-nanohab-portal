@@ -62,6 +62,7 @@ const sections: AdminSection[] = [
   { key: 'shared-exercises', titleEn: 'Shared Exercises', titleZh: '共享運動', icon: <Share2 size={ICON_SIZE} color={Colors.accent} />, route: '/admin/shared-exercises', countKey: 'shared_exercises' },
   { key: 'assessments', titleEn: 'Assessments', titleZh: '評估庫', icon: <ClipboardCheck size={ICON_SIZE} color="#2EAADC" />, route: '/admin/assessments' },
   { key: 'tier-management', titleEn: 'Tier Management', titleZh: '級別管理', icon: <Crown size={ICON_SIZE} color="#D4A030" />, route: '/admin/tier-management', countKey: 'clinician_tiers' },
+  { key: 'advertisements', titleEn: 'Advertisements', titleZh: '廣告管理', icon: <Megaphone size={ICON_SIZE} color="#D94F7A" />, route: '/admin/advertisements', countKey: 'app_ads' },
 ];
 
 export default function AdminHubScreen() {
@@ -131,6 +132,11 @@ export default function AdminHubScreen() {
         const { count: tierCount } = await supabase.from('clinician_tiers').select('*', { count: 'exact', head: true });
         counts.clinician_tiers = tierCount ?? 0;
       } catch (e) { console.log('Error fetching tier count:', e); }
+
+      try {
+        const { count: adCount } = await supabase.from('app_ads').select('*', { count: 'exact', head: true }).eq('is_active', true);
+        counts.app_ads = adCount ?? 0;
+      } catch (e) { console.log('Error fetching app ads count:', e); }
 
       return counts;
     },
