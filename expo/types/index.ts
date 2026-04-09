@@ -250,6 +250,31 @@ export interface MarketplaceReview {
   created_at?: string;
 }
 
+export interface ProgramObjective {
+  id: string;
+  program_id: string;
+  patient_id: string;
+  objective_en: string;
+  objective_zh_hant?: string;
+  objective_zh_hans?: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HolisticObjective {
+  id: string;
+  patient_id: string;
+  objective_en: string;
+  objective_zh_hant?: string;
+  objective_zh_hans?: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type UserRole = 'admin' | 'clinician';
 
 export interface AuthState {

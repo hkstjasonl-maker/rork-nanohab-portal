@@ -26,11 +26,17 @@ import {
   Search,
   Check,
   ChevronDown,
+  Target,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronUp,
 } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
-import { Patient } from '@/types';
+import { Patient, HolisticObjective } from '@/types';
+import ObjectiveFormModal from '@/components/ObjectiveFormModal';
 
 interface AssessmentLibraryItem {
   id: string;
@@ -67,9 +73,88 @@ export default function PatientDetailScreen() {
 
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showFeedingSkillsModal, setShowFeedingSkillsModal] = useState(false);
+  const [showObjectiveModal, setShowObjectiveModal] = useState(false);
+  const [editingObjective, setEditingObjective] = useState<HolisticObjective | null>(null);
+  const [objectivesExpanded, setObjectivesExpanded] = useState(true);
 
   const canAssignAssessments = isAdmin || clinicianCan('assign_assessments');
   const canPushFeedingSkills = isAdmin || clinicianCan('push_feeding_skills');
+
+  const holisticObjectivesQuery = useQuery({
+    queryKey: ['holistic-objectives', id],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('holistic_objectives')
+          .select('*')
+          .eq('patient_id', id)
+          .order('sort_order', { ascending: true });
+        if (error) {
+          console.log('Holistic objectives fetch error:', error);
+          return [];
+        }
+        return (data || []) as HolisticObjective[];
+      } catch (e) {
+        console.log('Holistic objectives exception:', e);
+        return [];
+      }
+    },
+    enabled: !!id,
+  });
+
+  const saveObjectiveMutation = useMutation({
+    mutationFn: async (formData: { id?: string; objective_en: string; objective_zh_hant: string; objective_zh_hans: string; sort_order: number; is_active: boolean }) => {
+      const payload = {
+        patient_id: id,
+        objective_en: formData.objective_en,
+        objective_zh_hant: formData.objective_zh_hant || null,
+        objective_zh_hans: formData.objective_zh_hans || null,
+        sort_order: formData.sort_order,
+        is_active: formData.is_active,
+      };
+      if (formData.id) {
+        const { error } = await supabase.from('holistic_objectives').update(payload).eq('id', formData.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('holistic_objectives').insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      setShowObjectiveModal(false);
+      setEditingObjective(null);
+      void queryClient.invalidateQueries({ queryKey: ['holistic-objectives', id] });
+      Alert.alert('Saved 已儲存', 'Objective saved.\n目標已儲存。');
+    },
+    onError: (error: Error) => {
+      console.log('Save holistic objective error:', error);
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  const deleteObjectiveMutation = useMutation({
+    mutationFn: async (objectiveId: string) => {
+      const { error } = await supabase.from('holistic_objectives').delete().eq('id', objectiveId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['holistic-objectives', id] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error 錯誤', error.message);
+    },
+  });
+
+  const handleDeleteObjective = useCallback((obj: HolisticObjective) => {
+    Alert.alert(
+      'Delete Objective 刪除目標',
+      `Delete "${obj.objective_en}"?\n刪除「${obj.objective_en}」？`,
+      [
+        { text: 'Cancel 取消', style: 'cancel' },
+        { text: 'Delete 刪除', style: 'destructive', onPress: () => deleteObjectiveMutation.mutate(obj.id) },
+      ]
+    );
+  }, [deleteObjectiveMutation]);
 
   const patientQuery = useQuery({
     queryKey: ['patient', id],
@@ -272,6 +357,84 @@ export default function PatientDetailScreen() {
           <EditField label="Notes 備註" value={notes} onChangeText={handleFieldChange(setNotes)} placeholder="Additional notes" multiline />
         </View>
 
+        <View style={styles.objectivesSection}>
+          <TouchableOpacity
+            style={styles.objectivesSectionHeader}
+            onPress={() => setObjectivesExpanded(!objectivesExpanded)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.objectivesSectionLeft}>
+              <Target size={18} color="#6366F1" />
+              <Text style={styles.objectivesSectionTitle}>Holistic Objectives 整體目標</Text>
+              <View style={styles.objectivesCountBadge}>
+                <Text style={styles.objectivesCountText}>{holisticObjectivesQuery.data?.length ?? 0}</Text>
+              </View>
+            </View>
+            <View style={styles.objectivesSectionRight}>
+              <TouchableOpacity
+                style={styles.addObjectiveBtn}
+                onPress={() => { setEditingObjective(null); setShowObjectiveModal(true); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Plus size={16} color={Colors.white} />
+              </TouchableOpacity>
+              {objectivesExpanded ? (
+                <ChevronUp size={18} color={Colors.textTertiary} />
+              ) : (
+                <ChevronDown size={18} color={Colors.textTertiary} />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {objectivesExpanded && (
+            <View style={styles.objectivesList}>
+              {holisticObjectivesQuery.isLoading ? (
+                <ActivityIndicator size="small" color={Colors.accent} style={{ marginVertical: 12 }} />
+              ) : (holisticObjectivesQuery.data?.length ?? 0) === 0 ? (
+                <View style={styles.objectivesEmpty}>
+                  <Target size={28} color={Colors.borderLight} />
+                  <Text style={styles.objectivesEmptyText}>No objectives yet 尚無目標</Text>
+                </View>
+              ) : (
+                holisticObjectivesQuery.data?.map((obj, idx) => (
+                  <View key={obj.id} style={[styles.objectiveCard, !obj.is_active && styles.objectiveCardInactive]}>
+                    <View style={styles.objectiveCardLeft}>
+                      <View style={styles.objectiveOrderBadge}>
+                        <Text style={styles.objectiveOrderText}>{obj.sort_order ?? idx + 1}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.objectiveTextEn} numberOfLines={3}>{obj.objective_en}</Text>
+                        {obj.objective_zh_hant ? (
+                          <Text style={styles.objectiveTextZh} numberOfLines={2}>{obj.objective_zh_hant}</Text>
+                        ) : null}
+                        {!obj.is_active && (
+                          <View style={styles.objectiveInactiveBadge}>
+                            <Text style={styles.objectiveInactiveBadgeText}>Inactive 停用</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.objectiveCardActions}>
+                      <TouchableOpacity
+                        onPress={() => { setEditingObjective(obj); setShowObjectiveModal(true); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Pencil size={15} color={Colors.info} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteObjective(obj)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Trash2 size={15} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+
         <View style={styles.actionsSection}>
           <TouchableOpacity
             style={styles.dashboardButton}
@@ -339,6 +502,22 @@ export default function PatientDetailScreen() {
         onClose={() => setShowFeedingSkillsModal(false)}
         patientId={id!}
         patientName={patient.patient_name}
+      />
+
+      <ObjectiveFormModal
+        visible={showObjectiveModal}
+        onClose={() => { setShowObjectiveModal(false); setEditingObjective(null); }}
+        onSave={(data) => saveObjectiveMutation.mutate(data)}
+        isSaving={saveObjectiveMutation.isPending}
+        initialData={editingObjective ? {
+          id: editingObjective.id,
+          objective_en: editingObjective.objective_en,
+          objective_zh_hant: editingObjective.objective_zh_hant || '',
+          objective_zh_hans: editingObjective.objective_zh_hans || '',
+          sort_order: editingObjective.sort_order,
+          is_active: editingObjective.is_active,
+        } : null}
+        title={editingObjective ? 'Edit Objective 編輯目標' : 'New Objective 新目標'}
       />
     </KeyboardAvoidingView>
   );
@@ -829,6 +1008,135 @@ const styles = StyleSheet.create({
   editInputMultiline: {
     minHeight: 90,
     textAlignVertical: 'top',
+  },
+  objectivesSection: {
+    marginBottom: 24,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  objectivesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    backgroundColor: '#F0EDFF',
+  },
+  objectivesSectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  objectivesSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#4338CA',
+  },
+  objectivesCountBadge: {
+    backgroundColor: '#6366F1',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  objectivesCountText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.white,
+  },
+  objectivesSectionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addObjectiveBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  objectivesList: {
+    padding: 10,
+    gap: 8,
+  },
+  objectivesEmpty: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 6,
+  },
+  objectivesEmptyText: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+  },
+  objectiveCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  objectiveCardInactive: {
+    opacity: 0.55,
+  },
+  objectiveCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+  },
+  objectiveOrderBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  objectiveOrderText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#6366F1',
+  },
+  objectiveTextEn: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: Colors.text,
+    lineHeight: 19,
+  },
+  objectiveTextZh: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  objectiveInactiveBadge: {
+    backgroundColor: Colors.frozenLight,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  objectiveInactiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: Colors.frozen,
+  },
+  objectiveCardActions: {
+    gap: 10,
+    paddingLeft: 8,
   },
   actionsSection: {
     gap: 12,

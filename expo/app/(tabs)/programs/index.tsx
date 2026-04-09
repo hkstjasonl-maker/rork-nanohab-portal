@@ -20,6 +20,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Calendar,
   Clock,
   Dumbbell,
@@ -28,11 +29,14 @@ import {
   X,
   Trash2,
   Search,
+  Target,
+  Pencil,
 } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
-import { Patient, ExerciseProgram, ProgramExercise, Exercise } from '@/types';
+import { Patient, ExerciseProgram, ProgramExercise, Exercise, ProgramObjective } from '@/types';
+import ObjectiveFormModal from '@/components/ObjectiveFormModal';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABELS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
@@ -218,15 +222,17 @@ export default function ProgramsScreen() {
     ({ item }: { item: ExerciseProgram }) => {
       const exercises = programExercisesQuery.data?.[item.id] || [];
       return (
-        <ProgramCard
+        <ProgramCardWithObjectives
           program={item}
           exerciseCount={exercises.length}
           onPress={() => setEditingProgram(item)}
           onDelete={() => handleDeleteProgram(item)}
+          patientId={selectedPatientId!}
+          isAdmin={isAdmin}
         />
       );
     },
-    [programExercisesQuery.data, handleDeleteProgram]
+    [programExercisesQuery.data, handleDeleteProgram, selectedPatientId, isAdmin]
   );
 
   const keyExtractor = useCallback((item: ExerciseProgram) => item.id, []);
@@ -352,6 +358,198 @@ export default function ProgramsScreen() {
           onSaved={handleProgramSaved}
         />
       )}
+    </View>
+  );
+}
+
+function ProgramCardWithObjectives({
+  program,
+  exerciseCount,
+  onPress,
+  onDelete,
+  patientId,
+  isAdmin,
+}: {
+  program: ExerciseProgram;
+  exerciseCount: number;
+  onPress: () => void;
+  onDelete: () => void;
+  patientId: string;
+  isAdmin: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [objectivesExpanded, setObjectivesExpanded] = useState(false);
+  const [showObjectiveModal, setShowObjectiveModal] = useState(false);
+  const [editingObjective, setEditingObjective] = useState<ProgramObjective | null>(null);
+
+  const objectivesQuery = useQuery({
+    queryKey: ['program-objectives', program.id],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('program_objectives')
+          .select('*')
+          .eq('program_id', program.id)
+          .order('sort_order', { ascending: true });
+        if (error) {
+          console.log('Program objectives fetch error:', error);
+          return [];
+        }
+        return (data || []) as ProgramObjective[];
+      } catch (e) {
+        console.log('Program objectives exception:', e);
+        return [];
+      }
+    },
+  });
+
+  const saveObjectiveMutation = useMutation({
+    mutationFn: async (formData: { id?: string; objective_en: string; objective_zh_hant: string; objective_zh_hans: string; sort_order: number; is_active: boolean }) => {
+      const payload = {
+        program_id: program.id,
+        patient_id: patientId,
+        objective_en: formData.objective_en,
+        objective_zh_hant: formData.objective_zh_hant || null,
+        objective_zh_hans: formData.objective_zh_hans || null,
+        sort_order: formData.sort_order,
+        is_active: formData.is_active,
+      };
+      if (formData.id) {
+        const { error } = await supabase.from('program_objectives').update(payload).eq('id', formData.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('program_objectives').insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      setShowObjectiveModal(false);
+      setEditingObjective(null);
+      void queryClient.invalidateQueries({ queryKey: ['program-objectives', program.id] });
+      Alert.alert('Saved \u5df2\u5132\u5b58', 'Objective saved.\n\u76ee\u6a19\u5df2\u5132\u5b58\u3002');
+    },
+    onError: (error: Error) => {
+      console.log('Save program objective error:', error);
+      Alert.alert('Error \u932f\u8aa4', error.message);
+    },
+  });
+
+  const deleteObjectiveMutation = useMutation({
+    mutationFn: async (objectiveId: string) => {
+      const { error } = await supabase.from('program_objectives').delete().eq('id', objectiveId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['program-objectives', program.id] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error \u932f\u8aa4', error.message);
+    },
+  });
+
+  const handleDeleteObjective = useCallback((obj: ProgramObjective) => {
+    Alert.alert(
+      'Delete Objective \u522a\u9664\u76ee\u6a19',
+      `Delete "${obj.objective_en}"?\n\u522a\u9664\u300c${obj.objective_en}\u300d\uff1f`,
+      [
+        { text: 'Cancel \u53d6\u6d88', style: 'cancel' },
+        { text: 'Delete \u522a\u9664', style: 'destructive', onPress: () => deleteObjectiveMutation.mutate(obj.id) },
+      ]
+    );
+  }, [deleteObjectiveMutation]);
+
+  const objCount = objectivesQuery.data?.length ?? 0;
+
+  return (
+    <View>
+      <ProgramCard
+        program={program}
+        exerciseCount={exerciseCount}
+        onPress={onPress}
+        onDelete={onDelete}
+      />
+
+      <View style={styles.programObjectivesContainer}>
+        <TouchableOpacity
+          style={styles.programObjectivesHeader}
+          onPress={() => setObjectivesExpanded(!objectivesExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.programObjectivesHeaderLeft}>
+            <Target size={14} color="#6366F1" />
+            <Text style={styles.programObjectivesTitle}>Objectives \u76ee\u6a19</Text>
+            <View style={styles.programObjectivesCount}>
+              <Text style={styles.programObjectivesCountText}>{objCount}</Text>
+            </View>
+          </View>
+          <View style={styles.programObjectivesHeaderRight}>
+            <TouchableOpacity
+              style={styles.programObjectivesAddBtn}
+              onPress={() => { setEditingObjective(null); setShowObjectiveModal(true); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Plus size={13} color={Colors.white} />
+            </TouchableOpacity>
+            {objectivesExpanded ? (
+              <ChevronUp size={15} color={Colors.textTertiary} />
+            ) : (
+              <ChevronDown size={15} color={Colors.textTertiary} />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {objectivesExpanded && (
+          <View style={styles.programObjectivesList}>
+            {objectivesQuery.isLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} style={{ marginVertical: 8 }} />
+            ) : objCount === 0 ? (
+              <Text style={styles.programObjectivesEmpty}>No objectives \u5c1a\u7121\u76ee\u6a19</Text>
+            ) : (
+              objectivesQuery.data?.map((obj, idx) => (
+                <View key={obj.id} style={[styles.programObjectiveRow, !obj.is_active && { opacity: 0.5 }]}>
+                  <View style={styles.programObjectiveOrderBadge}>
+                    <Text style={styles.programObjectiveOrderText}>{obj.sort_order ?? idx + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.programObjectiveText} numberOfLines={2}>{obj.objective_en}</Text>
+                    {obj.objective_zh_hant ? (
+                      <Text style={styles.programObjectiveTextZh} numberOfLines={1}>{obj.objective_zh_hant}</Text>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { setEditingObjective(obj); setShowObjectiveModal(true); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Pencil size={13} color={Colors.info} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteObjective(obj)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Trash2 size={13} color={Colors.danger} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </View>
+
+      <ObjectiveFormModal
+        visible={showObjectiveModal}
+        onClose={() => { setShowObjectiveModal(false); setEditingObjective(null); }}
+        onSave={(data) => saveObjectiveMutation.mutate(data)}
+        isSaving={saveObjectiveMutation.isPending}
+        initialData={editingObjective ? {
+          id: editingObjective.id,
+          objective_en: editingObjective.objective_en,
+          objective_zh_hant: editingObjective.objective_zh_hant || '',
+          objective_zh_hans: editingObjective.objective_zh_hans || '',
+          sort_order: editingObjective.sort_order,
+          is_active: editingObjective.is_active,
+        } : null}
+        title={editingObjective ? 'Edit Objective \u7de8\u8f2f\u76ee\u6a19' : 'New Objective \u65b0\u76ee\u6a19'}
+      />
     </View>
   );
 }
@@ -1460,6 +1658,104 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     marginTop: 8,
     fontStyle: 'italic' as const,
+  },
+  programObjectivesContainer: {
+    backgroundColor: Colors.white,
+    marginTop: -2,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: Colors.borderLight,
+    overflow: 'hidden',
+  },
+  programObjectivesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F5F3FF',
+  },
+  programObjectivesHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  programObjectivesTitle: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#4338CA',
+  },
+  programObjectivesCount: {
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 0,
+    minWidth: 16,
+    alignItems: 'center',
+  },
+  programObjectivesCountText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: Colors.white,
+  },
+  programObjectivesHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  programObjectivesAddBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  programObjectivesList: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  programObjectivesEmpty: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
+  programObjectiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+  },
+  programObjectiveOrderBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  programObjectiveOrderText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#6366F1',
+  },
+  programObjectiveText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.text,
+    lineHeight: 17,
+  },
+  programObjectiveTextZh: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
   fab: {
     position: 'absolute',
