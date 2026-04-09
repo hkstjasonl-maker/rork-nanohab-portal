@@ -275,6 +275,31 @@ export interface HolisticObjective {
   updated_at?: string;
 }
 
+export interface ExerciseReviewRequirement {
+  id: string;
+  program_id: string;
+  patient_id: string;
+  exercise_title_en: string;
+  max_submissions: number;
+  allowed_days: string[];
+  notes?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface ExerciseVideoSubmission {
+  id: string;
+  patient_id: string;
+  exercise_title_en: string;
+  video_url: string;
+  submission_date: string;
+  review_status: 'pending' | 'reviewed' | 'redo_requested';
+  rating?: number;
+  reviewer_notes?: string;
+  reviewed_at?: string;
+  created_at?: string;
+}
+
 export type UserRole = 'admin' | 'clinician';
 
 export interface AuthState {

@@ -37,6 +37,7 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient, HolisticObjective } from '@/types';
 import ObjectiveFormModal from '@/components/ObjectiveFormModal';
+import VideoSubmissions from '@/components/VideoSubmissions';
 
 interface AssessmentLibraryItem {
   id: string;
@@ -434,6 +435,11 @@ export default function PatientDetailScreen() {
             </View>
           )}
         </View>
+
+        <VideoSubmissions
+          patientId={id!}
+          patientName={patient.patient_name}
+        />
 
         <View style={styles.actionsSection}>
           <TouchableOpacity

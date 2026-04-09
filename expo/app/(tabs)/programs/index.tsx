@@ -37,6 +37,7 @@ import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Patient, ExerciseProgram, ProgramExercise, Exercise, ProgramObjective } from '@/types';
 import ObjectiveFormModal from '@/components/ObjectiveFormModal';
+import VideoReviewRequirements from '@/components/VideoReviewRequirements';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABELS_ZH = ['日', '一', '二', '三', '四', '五', '六'];
@@ -549,6 +550,12 @@ function ProgramCardWithObjectives({
           is_active: editingObjective.is_active,
         } : null}
         title={editingObjective ? 'Edit Objective \u7de8\u8f2f\u76ee\u6a19' : 'New Objective \u65b0\u76ee\u6a19'}
+      />
+
+      <VideoReviewRequirements
+        programId={program.id}
+        patientId={patientId}
+        isAdmin={isAdmin}
       />
     </View>
   );
