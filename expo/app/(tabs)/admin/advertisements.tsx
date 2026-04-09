@@ -18,7 +18,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
+
 import * as Linking from 'expo-linking';
 import {
   Search,
@@ -828,7 +828,12 @@ export default function AdvertisementsScreen() {
   const handleCopyReport = useCallback(async () => {
     const text = buildReportText();
     if (!text) return;
-    await Clipboard.setStringAsync(text);
+    if (Platform.OS === 'web') {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const { default: ClipboardModule } = await import('expo-clipboard');
+      await ClipboardModule.setStringAsync(text);
+    }
     setCopiedToast(true);
     setTimeout(() => setCopiedToast(false), 2000);
   }, [buildReportText]);
