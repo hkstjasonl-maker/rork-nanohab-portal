@@ -312,12 +312,12 @@ export interface TrainingCourse {
   title: string;
   title_zh?: string;
   description?: string;
+  description_zh?: string;
   course_date?: string;
   location?: string;
   location_zh?: string;
   instructor_name?: string;
   instructor_name_zh?: string;
-  max_participants?: number;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -329,10 +329,12 @@ export interface TrainingMaterial {
   title: string;
   title_zh?: string;
   description?: string;
+  description_zh?: string;
   storage_path: string;
   file_size_bytes?: number;
   page_count?: number;
   sort_order: number;
+  thumbnail_url?: string;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -352,23 +354,22 @@ export interface TrainingMaterialAssignment {
   material_id: string;
   clinician_id: string;
   assigned_at?: string;
-  start_date?: string;
-  end_date?: string;
+  access_start_date?: string;
+  access_end_date?: string;
   is_revoked: boolean;
   view_count?: number;
   last_viewed_at?: string;
-  created_at?: string;
   training_materials?: TrainingMaterial;
   clinicians?: { id: string; full_name: string; full_name_zh?: string; email: string; expires_at?: string };
 }
 
 export interface TrainingViewLog {
   id: string;
-  assignment_id: string;
   material_id: string;
   clinician_id: string;
   viewed_at: string;
-  duration_seconds?: number;
+  pages_viewed?: number;
+  view_duration_seconds?: number;
 }
 
 export type UserRole = 'admin' | 'clinician';

@@ -187,10 +187,11 @@ export default function LibraryScreen() {
 
   const logViewMutation = useMutation({
     mutationFn: async ({ assignmentId, materialId }: { assignmentId: string; materialId: string }) => {
+      const currentAssignment = materialsQuery.data?.find(a => a.id === assignmentId);
       await supabase
         .from('training_material_assignments')
         .update({
-          view_count: (assignmentsQuery.data?.find(a => a.id === assignmentId)?.view_count || 0) + 1,
+          view_count: (currentAssignment?.view_count || 0) + 1,
           last_viewed_at: new Date().toISOString(),
         })
         .eq('id', assignmentId);
@@ -198,7 +199,6 @@ export default function LibraryScreen() {
       await supabase
         .from('training_material_view_logs')
         .insert({
-          assignment_id: assignmentId,
           material_id: materialId,
           clinician_id: clinicianId,
           viewed_at: new Date().toISOString(),

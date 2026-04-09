@@ -118,12 +118,12 @@ function CoursesTab() {
     title: '',
     title_zh: '',
     description: '',
+    description_zh: '',
     course_date: '',
     location: '',
     location_zh: '',
     instructor_name: '',
     instructor_name_zh: '',
-    max_participants: '',
     is_active: true,
   });
 
@@ -159,18 +159,18 @@ function CoursesTab() {
         title: form.title.trim(),
         title_zh: form.title_zh.trim() || null,
         description: form.description.trim() || null,
+        description_zh: form.description_zh.trim() || null,
         course_date: form.course_date.trim() || null,
         location: form.location.trim() || null,
         location_zh: form.location_zh.trim() || null,
         instructor_name: form.instructor_name.trim() || null,
         instructor_name_zh: form.instructor_name_zh.trim() || null,
-        max_participants: form.max_participants ? parseInt(form.max_participants, 10) : null,
         is_active: form.is_active,
       };
       if (!payload.title) throw new Error('Title is required');
 
       if (editingCourse) {
-        const { error } = await supabase.from('training_courses').update(payload).eq('id', editingCourse.id);
+        const { error } = await supabase.from('training_courses').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingCourse.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('training_courses').insert(payload);
@@ -195,7 +195,7 @@ function CoursesTab() {
   });
 
   const resetForm = useCallback(() => {
-    setForm({ title: '', title_zh: '', description: '', course_date: '', location: '', location_zh: '', instructor_name: '', instructor_name_zh: '', max_participants: '', is_active: true });
+    setForm({ title: '', title_zh: '', description: '', description_zh: '', course_date: '', location: '', location_zh: '', instructor_name: '', instructor_name_zh: '', is_active: true });
     setEditingCourse(null);
   }, []);
 
@@ -205,12 +205,12 @@ function CoursesTab() {
       title: course.title || '',
       title_zh: course.title_zh || '',
       description: course.description || '',
+      description_zh: (course as any).description_zh || '',
       course_date: course.course_date || '',
       location: course.location || '',
       location_zh: course.location_zh || '',
       instructor_name: course.instructor_name || '',
       instructor_name_zh: course.instructor_name_zh || '',
-      max_participants: course.max_participants?.toString() || '',
       is_active: course.is_active ?? true,
     });
     setShowModal(true);
@@ -328,12 +328,12 @@ function CoursesTab() {
             <FormField label="Title *" value={form.title} onChangeText={(v) => setForm(p => ({ ...p, title: v }))} />
             <FormField label="Title (Chinese) 中文標題" value={form.title_zh} onChangeText={(v) => setForm(p => ({ ...p, title_zh: v }))} />
             <FormField label="Description" value={form.description} onChangeText={(v) => setForm(p => ({ ...p, description: v }))} multiline />
+            <FormField label="Description (Chinese)" value={form.description_zh} onChangeText={(v) => setForm(p => ({ ...p, description_zh: v }))} multiline />
             <FormField label="Course Date (YYYY-MM-DD)" value={form.course_date} onChangeText={(v) => setForm(p => ({ ...p, course_date: v }))} placeholder="2025-06-15" />
             <FormField label="Location" value={form.location} onChangeText={(v) => setForm(p => ({ ...p, location: v }))} />
             <FormField label="Location (Chinese)" value={form.location_zh} onChangeText={(v) => setForm(p => ({ ...p, location_zh: v }))} />
             <FormField label="Instructor" value={form.instructor_name} onChangeText={(v) => setForm(p => ({ ...p, instructor_name: v }))} />
             <FormField label="Instructor (Chinese)" value={form.instructor_name_zh} onChangeText={(v) => setForm(p => ({ ...p, instructor_name_zh: v }))} />
-            <FormField label="Max Participants" value={form.max_participants} onChangeText={(v) => setForm(p => ({ ...p, max_participants: v }))} keyboardType="numeric" />
             <View style={styles.switchRow}>
               <Text style={styles.fieldLabel}>Active</Text>
               <Switch value={form.is_active} onValueChange={(v) => setForm(p => ({ ...p, is_active: v }))} trackColor={{ true: Colors.accent }} />
@@ -893,9 +893,8 @@ function AssignSection() {
           rows.push({
             material_id: matId,
             clinician_id: e.clinician_id,
-            start_date: startDate,
-            end_date: endDate,
-            is_revoked: false,
+            access_start_date: startDate,
+            access_end_date: endDate || null,
           });
         });
       });
@@ -995,7 +994,7 @@ function AssignmentListSection() {
 
   const extendMutation = useMutation({
     mutationFn: async ({ id, newEnd }: { id: string; newEnd: string }) => {
-      const { error } = await supabase.from('training_material_assignments').update({ end_date: newEnd }).eq('id', id);
+      const { error } = await supabase.from('training_material_assignments').update({ access_end_date: newEnd }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -1006,7 +1005,7 @@ function AssignmentListSection() {
   });
 
   const handleExtend = useCallback((a: any) => {
-    const currentEnd = a.end_date || new Date().toISOString().split('T')[0];
+    const currentEnd = a.access_end_date || new Date().toISOString().split('T')[0];
     const newEnd = new Date(currentEnd);
     newEnd.setMonth(newEnd.getMonth() + 1);
     const newEndStr = newEnd.toISOString().split('T')[0];
@@ -1019,8 +1018,8 @@ function AssignmentListSection() {
   const getStatus = useCallback((a: any): { label: string; color: string; bg: string } => {
     if (a.is_revoked) return { label: 'Revoked', color: Colors.danger, bg: Colors.dangerLight };
     const now = new Date().toISOString().split('T')[0];
-    if (a.start_date && a.start_date > now) return { label: 'Pending', color: Colors.warning, bg: Colors.warningLight };
-    if (a.end_date && a.end_date < now) return { label: 'Expired', color: Colors.danger, bg: Colors.dangerLight };
+    if (a.access_start_date && a.access_start_date > now) return { label: 'Pending', color: Colors.warning, bg: Colors.warningLight };
+    if (a.access_end_date && a.access_end_date < now) return { label: 'Expired', color: Colors.danger, bg: Colors.dangerLight };
     return { label: 'Active', color: Colors.success, bg: Colors.successLight };
   }, []);
 
@@ -1046,8 +1045,8 @@ function AssignmentListSection() {
             <View style={styles.metaRow}>
               <Text style={styles.metaText}>Views: {a.view_count || 0}</Text>
               {a.last_viewed_at ? <Text style={styles.metaText}>Last: {new Date(a.last_viewed_at).toLocaleDateString()}</Text> : null}
-              {a.start_date ? <Text style={styles.metaText}>From: {a.start_date}</Text> : null}
-              {a.end_date ? <Text style={styles.metaText}>To: {a.end_date}</Text> : null}
+              {a.access_start_date ? <Text style={styles.metaText}>From: {a.access_start_date}</Text> : null}
+              {a.access_end_date ? <Text style={styles.metaText}>To: {a.access_end_date}</Text> : null}
             </View>
             {!a.is_revoked && (
               <View style={styles.cardActions}>
