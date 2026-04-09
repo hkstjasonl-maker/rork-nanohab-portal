@@ -29,6 +29,7 @@ import {
   Crown,
   Shield,
   ChevronRight,
+  GraduationCap,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -63,6 +64,7 @@ const sections: AdminSection[] = [
   { key: 'assessments', titleEn: 'Assessments', titleZh: '評估庫', icon: <ClipboardCheck size={ICON_SIZE} color="#2EAADC" />, route: '/admin/assessments' },
   { key: 'tier-management', titleEn: 'Tier Management', titleZh: '級別管理', icon: <Crown size={ICON_SIZE} color="#D4A030" />, route: '/admin/tier-management', countKey: 'clinician_tiers' },
   { key: 'advertisements', titleEn: 'Advertisements', titleZh: '廣告管理', icon: <Megaphone size={ICON_SIZE} color="#D94F7A" />, route: '/admin/advertisements', countKey: 'app_ads' },
+  { key: 'training', titleEn: 'Training Library', titleZh: '培訓文庫', icon: <GraduationCap size={ICON_SIZE} color="#2D6A4F" />, route: '/admin/training', countKey: 'training_courses' },
 ];
 
 export default function AdminHubScreen() {
@@ -137,6 +139,11 @@ export default function AdminHubScreen() {
         const { count: adCount } = await supabase.from('app_ads').select('*', { count: 'exact', head: true }).eq('is_active', true);
         counts.app_ads = adCount ?? 0;
       } catch (e) { console.log('Error fetching app ads count:', e); }
+
+      try {
+        const { count: trainingCount } = await supabase.from('training_courses').select('*', { count: 'exact', head: true }).eq('is_active', true);
+        counts.training_courses = trainingCount ?? 0;
+      } catch (e) { console.log('Error fetching training courses count:', e); }
 
       return counts;
     },

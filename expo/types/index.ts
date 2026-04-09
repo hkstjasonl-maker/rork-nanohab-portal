@@ -307,6 +307,70 @@ export interface ExerciseVideoSubmission {
   created_at?: string;
 }
 
+export interface TrainingCourse {
+  id: string;
+  title: string;
+  title_zh?: string;
+  description?: string;
+  course_date?: string;
+  location?: string;
+  location_zh?: string;
+  instructor_name?: string;
+  instructor_name_zh?: string;
+  max_participants?: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TrainingMaterial {
+  id: string;
+  course_id: string;
+  title: string;
+  title_zh?: string;
+  description?: string;
+  storage_path: string;
+  file_size_bytes?: number;
+  page_count?: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TrainingEnrollment {
+  id: string;
+  course_id: string;
+  clinician_id: string;
+  enrolled_at?: string;
+  training_courses?: TrainingCourse;
+  clinicians?: { id: string; full_name: string; full_name_zh?: string; email: string; expires_at?: string };
+}
+
+export interface TrainingMaterialAssignment {
+  id: string;
+  material_id: string;
+  clinician_id: string;
+  assigned_at?: string;
+  start_date?: string;
+  end_date?: string;
+  is_revoked: boolean;
+  view_count?: number;
+  last_viewed_at?: string;
+  created_at?: string;
+  training_materials?: TrainingMaterial;
+  clinicians?: { id: string; full_name: string; full_name_zh?: string; email: string; expires_at?: string };
+}
+
+export interface TrainingViewLog {
+  id: string;
+  assignment_id: string;
+  material_id: string;
+  clinician_id: string;
+  viewed_at: string;
+  duration_seconds?: number;
+}
+
 export type UserRole = 'admin' | 'clinician';
 
 export interface AuthState {
