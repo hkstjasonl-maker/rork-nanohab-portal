@@ -148,7 +148,7 @@ export default function ProgramsScreen() {
       if (ids.length > 0) {
         const { data: exercises, error: exError } = await supabase
           .from('exercises')
-          .select('*, exercise_library(*)')
+          .select('*')
           .in('program_id', ids)
           .order('sort_order', { ascending: true });
 
@@ -769,7 +769,7 @@ function ProgramFormModal({
       if (!program?.id) return [];
       const { data, error } = await supabase
         .from('exercises')
-        .select('*, exercise_library(*)')
+        .select('*')
         .eq('program_id', program.id)
         .order('sort_order', { ascending: true });
       if (error) {
@@ -1274,7 +1274,7 @@ function ExercisePickerModal({
       const [sharedRes, ownRes] = await Promise.all([
         supabase
           .from('shared_exercises')
-          .select('exercise_library_id, exercise_library(*)')
+          .select('exercise_library_id')
           .eq('clinician_id', clinicianId),
         supabase
           .from('exercise_library')
