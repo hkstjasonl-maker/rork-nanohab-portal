@@ -159,6 +159,8 @@ export default function ClinicalDashboardScreen() {
   const [logsDateFrom, setLogsDateFrom] = useState<string>('');
   const [logsDateTo, setLogsDateTo] = useState<string>('');
   const [logsDisplayCount, setLogsDisplayCount] = useState<number>(PAGE_SIZE);
+  const [sessionsExpanded, setSessionsExpanded] = useState<boolean>(false);
+  const [sessionsDisplayCount, setSessionsDisplayCount] = useState<number>(PAGE_SIZE);
 
   const patientQuery = useQuery({
     queryKey: ['clinical-dashboard-patient', id],
@@ -448,6 +450,27 @@ export default function ClinicalDashboardScreen() {
     setLogsDateTo('');
     setLogsDisplayCount(PAGE_SIZE);
   }, []);
+
+  const sessionsFiltered = useMemo(() => {
+    return [...allSessions].reverse();
+  }, [allSessions]);
+
+  const sessionsToShow = useMemo(() => {
+    return sessionsFiltered.slice(0, sessionsDisplayCount);
+  }, [sessionsFiltered, sessionsDisplayCount]);
+
+  const hasMoreSessions = sessionsFiltered.length > sessionsDisplayCount;
+
+  const handleLoadMoreSessions = useCallback(() => {
+    setSessionsDisplayCount(prev => prev + PAGE_SIZE);
+  }, []);
+
+  const sessionsTotalCount = allSessions.length;
+  const sessionsAvgDuration = useMemo(() => {
+    if (allSessions.length === 0) return 0;
+    const total = allSessions.reduce((s, sess) => s + (sess.duration_seconds || 0), 0);
+    return Math.round(total / allSessions.length);
+  }, [allSessions]);
 
   const patient = patientQuery.data;
   const isLoading = patientQuery.isLoading || exerciseLogsQuery.isLoading || appSessionsQuery.isLoading;
@@ -843,6 +866,65 @@ export default function ClinicalDashboardScreen() {
             {hasMoreLogs && (
               <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadMoreLogs} activeOpacity={0.7}>
                 <Text style={styles.loadMoreText}>Load More 載入更多 ({fullLogsFiltered.length - logsDisplayCount} remaining)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.logsExpandToggle}
+          onPress={() => {
+            setSessionsExpanded(!sessionsExpanded);
+            if (!sessionsExpanded) setSessionsDisplayCount(PAGE_SIZE);
+          }}
+          activeOpacity={0.7}
+        >
+          <Activity size={16} color={ACCENT} />
+          <Text style={styles.logsExpandToggleText}>
+            {sessionsExpanded ? 'Hide App Sessions 收起應用紀錄' : `View All App Sessions 查看全部應用紀錄 (${sessionsTotalCount})`}
+          </Text>
+          {sessionsExpanded ? <ChevronUp size={16} color={ACCENT} /> : <ChevronDown size={16} color={ACCENT} />}
+        </TouchableOpacity>
+
+        {sessionsExpanded && (
+          <View style={styles.logsSection}>
+            <View style={styles.logsCountBar}>
+              <Text style={styles.logsCountText}>
+                {sessionsTotalCount} total sessions · avg {formatDuration(sessionsAvgDuration)}
+              </Text>
+            </View>
+
+            <View style={styles.card}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>Opened 開啟時間</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>Closed 關閉時間</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: 'right' as const }]}>Duration 時長</Text>
+              </View>
+              {sessionsToShow.length === 0 ? (
+                <View style={styles.logsEmpty}>
+                  <Activity size={20} color={Colors.textTertiary} />
+                  <Text style={styles.logsEmptyText}>No app sessions 沒有應用紀錄</Text>
+                </View>
+              ) : (
+                sessionsToShow.map((sess, idx) => {
+                  const durationSec = sess.duration_seconds || 0;
+                  const mins = Math.floor(durationSec / 60);
+                  const secs = durationSec % 60;
+                  const durationStr = `${mins}m ${secs}s`;
+                  return (
+                    <View key={sess.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                      <Text style={[styles.tableCell, { flex: 1.4, fontSize: 11 }]}>{formatDateTime(sess.opened_at)}</Text>
+                      <Text style={[styles.tableCell, { flex: 1.4, fontSize: 11 }]}>{formatDateTime(sess.closed_at)}</Text>
+                      <Text style={[styles.tableCell, { flex: 0.8, textAlign: 'right' as const, fontWeight: '600' as const, color: ACCENT }]}>{durationStr}</Text>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {hasMoreSessions && (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadMoreSessions} activeOpacity={0.7}>
+                <Text style={styles.loadMoreText}>Load More 載入更多 ({sessionsFiltered.length - sessionsDisplayCount} remaining)</Text>
               </TouchableOpacity>
             )}
           </View>
