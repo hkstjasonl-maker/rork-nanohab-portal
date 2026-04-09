@@ -40,6 +40,9 @@ export default function PatientsScreen() {
   const [searchText, setSearchText] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const isTrialUser = !isAdmin && !!clinician?.expires_at;
+  const maxPatients = clinician?.max_patients || 999;
+
   const patientsQuery = useQuery({
     queryKey: ['patients', isAdmin, clinician?.id],
     queryFn: async () => {
@@ -237,10 +240,28 @@ export default function PatientsScreen() {
         />
       )}
 
+      {isTrialUser && (patientsQuery.data?.length || 0) >= maxPatients && (
+        <View style={styles.trialLimitBanner}>
+          <Text style={styles.trialLimitText}>
+            Trial limit: {patientsQuery.data?.length || 0}/{maxPatients} patients · Upgrade for unlimited
+          </Text>
+          <Text style={styles.trialLimitTextZh}>
+            試用限制：{patientsQuery.data?.length || 0}/{maxPatients} 位患者 · 升級取消限制
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity
-        style={[styles.fab, { bottom: 24 }]}
-        onPress={() => setShowAddModal(true)}
-        activeOpacity={0.85}
+        style={[
+          styles.fab,
+          { bottom: 24 },
+          isTrialUser && (patientsQuery.data?.length || 0) >= maxPatients && styles.fabDisabled,
+        ]}
+        onPress={() => {
+          if (isTrialUser && (patientsQuery.data?.length || 0) >= maxPatients) return;
+          setShowAddModal(true);
+        }}
+        activeOpacity={isTrialUser && (patientsQuery.data?.length || 0) >= maxPatients ? 1 : 0.85}
         testID="add-patient-button"
       >
         <Plus size={24} color={Colors.white} />
@@ -681,6 +702,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  fabDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowColor: '#D1D5DB',
+  },
+  trialLimitBanner: {
+    position: 'absolute',
+    bottom: 88,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFD54F',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  trialLimitText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#92400E',
+  },
+  trialLimitTextZh: {
+    fontSize: 11,
+    color: '#A16207',
+    marginTop: 2,
   },
   modalContainer: {
     flex: 1,

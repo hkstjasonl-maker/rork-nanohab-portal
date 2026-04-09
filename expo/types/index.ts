@@ -31,6 +31,7 @@ export interface Clinician {
   override_can_push_feeding_skills?: boolean | null;
   override_can_manage_reinforcement?: boolean | null;
   override_can_send_notifications?: boolean | null;
+  expires_at?: string;
 }
 
 export interface ClinicianTier {

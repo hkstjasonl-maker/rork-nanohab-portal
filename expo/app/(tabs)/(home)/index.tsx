@@ -6,6 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +20,9 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
+  Star,
 } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
@@ -42,6 +45,11 @@ function getNotificationIcon(type?: string) {
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { isAdmin, clinician } = useAuth();
+
+  const isTrialUser = !isAdmin && !!clinician?.expires_at;
+  const trialDaysLeft = isTrialUser
+    ? Math.max(0, Math.ceil((new Date(clinician!.expires_at!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   const patientsQuery = useQuery({
     queryKey: ['dashboard-patients', isAdmin, clinician?.id],
@@ -183,6 +191,32 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <>
+            {isTrialUser && (
+              <View style={styles.trialBanner}>
+                <View style={styles.trialIconWrap}>
+                  <Star size={20} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.trialTitle}>
+                    NanoHab Trial 試用版
+                  </Text>
+                  <Text style={styles.trialBody}>
+                    {trialDaysLeft && trialDaysLeft > 0
+                      ? `${trialDaysLeft} days left · Upgrade to unlock full features\n剩餘 ${trialDaysLeft} 天 · 升級解鎖全部功能`
+                      : 'Trial expires today · Contact us to subscribe\n試用今天到期 · 聯絡我們訂閱'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('mailto:info@dravive.com?subject=NanoHab Subscription Inquiry')}
+                  style={styles.trialUpgradeBtn}
+                >
+                  <Text style={styles.trialUpgradeBtnText}>
+                    Upgrade{'\n'}升級
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.statsGrid}>
               <StatCard
                 icon={<Users size={22} color={Colors.accent} />}
@@ -451,6 +485,44 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: Colors.textTertiary,
+  },
+  trialBanner: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFD54F',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  },
+  trialIconWrap: {
+    backgroundColor: '#FFF3C4',
+    borderRadius: 10,
+    padding: 8,
+  },
+  trialTitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#92400E',
+  },
+  trialBody: {
+    fontSize: 12,
+    color: '#A16207',
+    marginTop: 2,
+  },
+  trialUpgradeBtn: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  trialUpgradeBtnText: {
+    color: '#fff',
+    fontWeight: '700' as const,
+    fontSize: 12,
+    textAlign: 'center' as const,
   },
 });
 

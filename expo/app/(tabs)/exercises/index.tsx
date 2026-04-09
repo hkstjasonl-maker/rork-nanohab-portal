@@ -69,6 +69,9 @@ export default function ExercisesScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  const isTrialUser = !isAdmin && !!clinician?.expires_at;
+  const maxExercises = clinician?.max_exercises || 999;
+
   const categoriesQuery = useQuery({
     queryKey: ['exercise-categories'],
     queryFn: async () => {
@@ -340,11 +343,33 @@ export default function ExercisesScreen() {
         />
       )}
 
+      {isTrialUser && (() => {
+        const ownExercises = exercisesQuery.data?.filter(e => e.created_by_clinician_id === clinician?.id) || [];
+        return ownExercises.length >= maxExercises;
+      })() && (
+        <View style={styles.trialLimitBanner}>
+          <Text style={styles.trialLimitText}>
+            Trial limit reached · Upgrade for unlimited exercises
+          </Text>
+          <Text style={styles.trialLimitTextZh}>
+            試用限制已達 · 升級取消運動限制
+          </Text>
+        </View>
+      )}
+
       {canCreateExercises && (
         <TouchableOpacity
-          style={[styles.fab, { bottom: 24 }]}
-          onPress={() => setShowAddModal(true)}
-          activeOpacity={0.85}
+          style={[
+            styles.fab,
+            { bottom: 24 },
+            isTrialUser && (exercisesQuery.data?.filter(e => e.created_by_clinician_id === clinician?.id) || []).length >= maxExercises && styles.fabDisabled,
+          ]}
+          onPress={() => {
+            const ownCount = (exercisesQuery.data?.filter(e => e.created_by_clinician_id === clinician?.id) || []).length;
+            if (isTrialUser && ownCount >= maxExercises) return;
+            setShowAddModal(true);
+          }}
+          activeOpacity={isTrialUser && (exercisesQuery.data?.filter(e => e.created_by_clinician_id === clinician?.id) || []).length >= maxExercises ? 1 : 0.85}
           testID="add-exercise-button"
         >
           <Plus size={24} color={Colors.white} />
@@ -952,6 +977,10 @@ const styles = StyleSheet.create({
   listDurationText: { fontSize: 10, color: Colors.textTertiary, fontWeight: '500' as const },
 
   fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  fabDisabled: { backgroundColor: '#D1D5DB', shadowColor: '#D1D5DB' },
+  trialLimitBanner: { position: 'absolute', bottom: 88, left: 20, right: 20, backgroundColor: '#FFF8E1', borderWidth: 1, borderColor: '#FFD54F', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' as const },
+  trialLimitText: { fontSize: 12, fontWeight: '600' as const, color: '#92400E' },
+  trialLimitTextZh: { fontSize: 11, color: '#A16207', marginTop: 2 },
   modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: 40 },
   categoryModal: { backgroundColor: Colors.white, borderRadius: 16, padding: 20, width: '100%', maxHeight: 420 },
   categoryModalTitle: { fontSize: 17, fontWeight: '600' as const, color: Colors.text, marginBottom: 12 },

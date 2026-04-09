@@ -64,6 +64,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           .eq('id', parsed.clinicianId)
           .single();
         if (data && data.is_active !== false) {
+          if (data.expires_at && new Date(data.expires_at) < new Date()) {
+            await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+            setIsLoading(false);
+            return;
+          }
           const c = data as Clinician;
           setClinician(c);
           setRole('clinician');
@@ -125,6 +130,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (error || !data) throw new Error('Invalid email or password 電郵或密碼錯誤');
     if (data.is_active === false) throw new Error('Account is deactivated 帳戶已停用');
     if (data.is_approved === false) throw new Error('Account pending approval 帳戶待批准');
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      throw new Error(
+        'Your trial period has expired. To continue using NanoHab, please contact us to subscribe.\n' +
+        '您的試用期已結束。如需繼續使用 NanoHab，請聯絡我們訂閱。\n\n' +
+        'Email: info@dravive.com'
+      );
+    }
 
     await supabase.from('clinicians').update({ last_login_at: new Date().toISOString() }).eq('id', data.id);
 
