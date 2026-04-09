@@ -32,6 +32,8 @@ import {
   Package,
   BookOpen,
   ChevronRight,
+  Banknote,
+  Flag,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -237,6 +239,28 @@ export default function BrowseMarketplaceScreen() {
               >
                 <BookOpen size={14} color={Colors.accent} />
                 <Text style={styles.navLinkText}>Rentals</Text>
+                <ChevronRight size={12} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+            {isAdmin && (
+              <TouchableOpacity
+                style={styles.navLink}
+                onPress={() => router.push('/marketplace/settlements')}
+                activeOpacity={0.7}
+              >
+                <Banknote size={14} color={Colors.accent} />
+                <Text style={styles.navLinkText}>Settlements</Text>
+                <ChevronRight size={12} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+            {isAdmin && (
+              <TouchableOpacity
+                style={styles.navLink}
+                onPress={() => router.push('/marketplace/reports')}
+                activeOpacity={0.7}
+              >
+                <Flag size={14} color={Colors.accent} />
+                <Text style={styles.navLinkText}>Reports</Text>
                 <ChevronRight size={12} color={Colors.textTertiary} />
               </TouchableOpacity>
             )}
