@@ -207,4 +207,3 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setNeedsAgreement,
   }), [isAuthenticated, isLoading, role, isAdmin, adminUser, clinician, clinicianTier, needsAgreement, loginAdmin, loginClinician, logout, clinicianCan]);
 });
-

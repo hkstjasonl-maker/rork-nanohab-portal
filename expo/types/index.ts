@@ -310,4 +310,3 @@ export interface AuthState {
   clinician: Clinician | null;
   clinicianTier: ClinicianTier | null;
 }
-

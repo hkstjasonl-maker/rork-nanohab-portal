@@ -1001,3 +1001,4 @@ const styles = StyleSheet.create({
   checkboxLabel: { flex: 1, fontSize: 14, color: Colors.text, lineHeight: 19 },
   checkboxLabelBold: { fontWeight: '500' as const },
 });
+

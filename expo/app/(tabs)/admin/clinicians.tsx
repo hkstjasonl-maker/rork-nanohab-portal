@@ -636,3 +636,4 @@ const styles = StyleSheet.create({
   },
   resetBtnText: { fontSize: 15, fontWeight: '600' as const, color: Colors.white },
 });
+

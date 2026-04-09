@@ -426,3 +426,4 @@ const styles = StyleSheet.create({
   },
   typeOptionText: { fontSize: 14, color: Colors.text, fontWeight: '500' as const, textTransform: 'capitalize' as const },
 });
+

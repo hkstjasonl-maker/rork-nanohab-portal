@@ -1897,3 +1897,4 @@ const styles = StyleSheet.create({
   },
   confirmAddText: { fontSize: 15, fontWeight: '600' as const, color: Colors.white },
 });
+

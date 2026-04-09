@@ -450,3 +450,4 @@ const styles = StyleSheet.create({
   },
   confirmRejectBtnText: { fontSize: 15, fontWeight: '600' as const, color: Colors.white },
 });
+

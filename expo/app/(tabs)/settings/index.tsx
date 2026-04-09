@@ -116,3 +116,4 @@ const styles = StyleSheet.create({
   copyright: { fontSize: 11, color: Colors.textTertiary, textAlign: 'center' as const },
   credit: { fontSize: 10, color: Colors.textTertiary, textAlign: 'center' as const },
 });
+

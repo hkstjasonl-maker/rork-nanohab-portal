@@ -632,3 +632,4 @@ const styles = StyleSheet.create({
   },
   switchLabel: { fontSize: 15, fontWeight: '500' as const, color: Colors.text },
 });
+

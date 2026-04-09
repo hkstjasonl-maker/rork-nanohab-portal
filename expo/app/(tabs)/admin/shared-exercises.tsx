@@ -432,3 +432,4 @@ const styles = StyleSheet.create({
   pickerItemText: { fontSize: 14, color: Colors.text },
   pickerItemTextActive: { color: Colors.white, fontWeight: '600' as const },
 });
+

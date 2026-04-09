@@ -620,3 +620,4 @@ const styles = StyleSheet.create({
   },
   batchFieldLabel: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
 });
+

@@ -389,3 +389,4 @@ const styles = StyleSheet.create({
   },
   dateLabel: { fontSize: 12, color: Colors.textTertiary, marginTop: 20 },
 });
+
