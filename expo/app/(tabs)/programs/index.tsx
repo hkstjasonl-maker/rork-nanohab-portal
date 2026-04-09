@@ -122,59 +122,56 @@ export default function ProgramsScreen() {
     return patientsQuery.data.find((p) => p.id === selectedPatientId) || null;
   }, [selectedPatientId, patientsQuery.data]);
 
-  const programsQuery = useQuery({
-    queryKey: ['programs', selectedPatientId],
+  const programsWithExercisesQuery = useQuery({
+    queryKey: ['programs-with-exercises', selectedPatientId],
     queryFn: async () => {
-      if (!selectedPatientId) return [];
+      if (!selectedPatientId) return { programs: [] as ExerciseProgram[], exerciseMap: {} as Record<string, ProgramExercise[]> };
       console.log('Fetching programs for patient:', selectedPatientId);
 
-      const { data, error } = await supabase
+      const { data: programs, error: progError } = await supabase
         .from('exercise_programs')
         .select('*')
         .eq('patient_id', selectedPatientId)
         .order('sort_order', { ascending: true });
 
-      if (error) {
-        console.log('Programs fetch error:', error);
-        throw error;
+      if (progError) {
+        console.log('Programs fetch error:', progError);
+        throw progError;
       }
-      return (data || []) as ExerciseProgram[];
+
+      const progList = (programs || []) as ExerciseProgram[];
+      const ids = progList.map((p) => p.id);
+      console.log('Programs fetched:', progList.length, 'IDs:', ids);
+
+      let exerciseMap: Record<string, ProgramExercise[]> = {};
+
+      if (ids.length > 0) {
+        const { data: exercises, error: exError } = await supabase
+          .from('exercises')
+          .select('*, exercise_library(*)')
+          .in('program_id', ids)
+          .order('sort_order', { ascending: true });
+
+        if (exError) {
+          console.log('Program exercises fetch error:', exError);
+        } else {
+          console.log('Exercises fetched raw count:', (exercises || []).length);
+          (exercises || []).forEach((ex: any) => {
+            const pid = ex.program_id;
+            if (!exerciseMap[pid]) exerciseMap[pid] = [];
+            exerciseMap[pid].push(ex as ProgramExercise);
+          });
+          console.log('Program exercises grouped:', Object.keys(exerciseMap).map(k => `${k}: ${exerciseMap[k].length}`));
+        }
+      }
+
+      return { programs: progList, exerciseMap };
     },
     enabled: !!selectedPatientId,
   });
 
-  const programIds = useMemo(
-    () => (programsQuery.data || []).map((p) => p.id),
-    [programsQuery.data]
-  );
-
-  const programExercisesQuery = useQuery({
-    queryKey: ['program-exercises', selectedPatientId, programIds],
-    queryFn: async () => {
-      if (!programIds.length) return {};
-      console.log('Fetching exercises for programs:', programIds);
-
-      const { data, error } = await supabase
-        .from('exercises')
-        .select('*, exercise_library(*)')
-        .in('program_id', programIds)
-        .order('sort_order', { ascending: true });
-
-      if (error) {
-        console.log('Program exercises fetch error:', error);
-        throw error;
-      }
-
-      const grouped: Record<string, ProgramExercise[]> = {};
-      (data || []).forEach((ex: ProgramExercise) => {
-        if (!grouped[ex.program_id]) grouped[ex.program_id] = [];
-        grouped[ex.program_id].push(ex);
-      });
-      console.log('Program exercises grouped:', Object.keys(grouped).map(k => `${k}: ${grouped[k].length}`));
-      return grouped;
-    },
-    enabled: !!selectedPatientId && programIds.length > 0,
-  });
+  const programsData = programsWithExercisesQuery.data?.programs;
+  const exerciseMap = programsWithExercisesQuery.data?.exerciseMap;
 
   const deleteProgramMutation = useMutation({
     mutationFn: async (programId: string) => {
@@ -197,8 +194,7 @@ export default function ProgramsScreen() {
       if (error) throw error;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['programs', selectedPatientId] });
-      void queryClient.invalidateQueries({ queryKey: ['program-exercises', selectedPatientId] });
+      void queryClient.invalidateQueries({ queryKey: ['programs-with-exercises', selectedPatientId] });
     },
     onError: (error: Error) => {
       Alert.alert('Error 錯誤', error.message);
@@ -221,13 +217,12 @@ export default function ProgramsScreen() {
   }, [deleteProgramMutation]);
 
   const handleProgramSaved = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ['programs', selectedPatientId] });
-    void queryClient.invalidateQueries({ queryKey: ['program-exercises', selectedPatientId] });
+    void queryClient.invalidateQueries({ queryKey: ['programs-with-exercises', selectedPatientId] });
   }, [queryClient, selectedPatientId]);
 
   const renderProgram = useCallback(
     ({ item }: { item: ExerciseProgram }) => {
-      const exercises = programExercisesQuery.data?.[item.id] || [];
+      const exercises = exerciseMap?.[item.id] || [];
       return (
         <ProgramCardWithObjectives
           program={item}
@@ -239,7 +234,7 @@ export default function ProgramsScreen() {
         />
       );
     },
-    [programExercisesQuery.data, handleDeleteProgram, selectedPatientId, isAdmin]
+    [exerciseMap, handleDeleteProgram, selectedPatientId, isAdmin]
   );
 
   const keyExtractor = useCallback((item: ExerciseProgram) => item.id, []);
@@ -249,7 +244,7 @@ export default function ProgramsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Programs 計劃</Text>
         <Text style={styles.headerCount}>
-          {programsQuery.data?.length ?? 0} program{(programsQuery.data?.length ?? 0) !== 1 ? 's' : ''}
+          {programsData?.length ?? 0} program{(programsData?.length ?? 0) !== 1 ? 's' : ''}
         </Text>
       </View>
 
@@ -284,34 +279,34 @@ export default function ProgramsScreen() {
           <Text style={styles.emptyText}>Select a patient to view programs</Text>
           <Text style={styles.emptyTextZh}>請先選擇患者以查看計劃</Text>
         </View>
-      ) : programsQuery.isLoading ? (
+      ) : programsWithExercisesQuery.isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.accent} />
           <Text style={styles.loadingText}>Loading programs...</Text>
         </View>
-      ) : programsQuery.isError ? (
+      ) : programsWithExercisesQuery.isError ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Failed to load programs</Text>
           <TouchableOpacity
             style={styles.retryButton}
-            onPress={() => void programsQuery.refetch()}
+            onPress={() => void programsWithExercisesQuery.refetch()}
           >
             <Text style={styles.retryText}>Retry 重試</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={programsQuery.data}
+          data={programsData}
           renderItem={renderProgram}
           keyExtractor={keyExtractor}
+          extraData={exerciseMap}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={programsQuery.isRefetching}
+              refreshing={programsWithExercisesQuery.isRefetching}
               onRefresh={() => {
-                void programsQuery.refetch();
-                void programExercisesQuery.refetch();
+                void programsWithExercisesQuery.refetch();
               }}
               tintColor={Colors.accent}
             />
@@ -952,8 +947,7 @@ function ProgramFormModal({
       return programId;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['programs'] });
-      void queryClient.invalidateQueries({ queryKey: ['program-exercises'] });
+      void queryClient.invalidateQueries({ queryKey: ['programs-with-exercises'] });
       onSaved();
       onClose();
       Alert.alert(
