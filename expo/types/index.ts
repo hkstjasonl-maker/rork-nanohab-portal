@@ -175,17 +175,21 @@ export interface ProgramExercise {
   exercise_library_id?: string;
   title_en?: string;
   title_zh_hant?: string;
+  title_zh_hans?: string;
   youtube_video_id?: string;
   vimeo_video_id?: string;
   duration_minutes?: number;
   dosage?: string;
   dosage_zh_hant?: string;
+  dosage_zh_hans?: string;
   dosage_per_day?: number;
   dosage_days_per_week?: number;
   sort_order: number;
   category?: string;
   modifications?: string;
   created_at?: string;
+  audio_instruction_url_en?: string;
+  audio_instruction_url_zh_hant?: string;
   exercise_library?: Exercise;
 }
 
